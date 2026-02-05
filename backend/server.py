@@ -29771,12 +29771,13 @@ def _demo_simulator_loop():
         
         time.sleep(15)  # Check every 15 seconds for faster demo
 
-try:
-    print("[DEMO SIMULATOR] Starting background thread...")
-    threading.Thread(target=_demo_simulator_loop, daemon=True).start()
-    print("[DEMO SIMULATOR] Background thread started successfully")
-except Exception as e:
-    print(f"[DEMO SIMULATOR] Failed to start: {e}")
+# DEMO SIMULATOR DISABLED - Production mode only
+# try:
+#     print("[DEMO SIMULATOR] Starting background thread...")
+#     threading.Thread(target=_demo_simulator_loop, daemon=True).start()
+#     print("[DEMO SIMULATOR] Background thread started successfully")
+# except Exception as e:
+#     print(f"[DEMO SIMULATOR] Failed to start: {e}")
 
 # --- Telegram Helpers ---
 def send_telegram_message(text):
