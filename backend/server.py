@@ -18916,6 +18916,24 @@ def admin_user_update(username: str):
 
     trade_enabled = 1 if request.form.get("trade_enabled") == "on" else 0
     disable_on_limit = 1 if request.form.get("disable_on_limit") == "on" else 0
+    
+    # Subscription settings
+    subscription_type = safe_str(request.form.get("subscription_type") or "trial")
+    subscription_months = int(request.form.get("subscription_months") or 1)
+    subscription_active = 1 if request.form.get("subscription_active") == "on" else 0
+    
+    # Calculate subscription dates
+    subscription_start = now_ts()
+    if subscription_type == "trial":
+        subscription_end = subscription_start + (7 * 24 * 60 * 60)  # 7 gün
+    elif subscription_type == "monthly":
+        subscription_end = subscription_start + (subscription_months * 30 * 24 * 60 * 60)
+    elif subscription_type == "yearly":
+        subscription_end = subscription_start + (365 * 24 * 60 * 60)
+    elif subscription_type == "lifetime":
+        subscription_end = subscription_start + (100 * 365 * 24 * 60 * 60)  # 100 yıl
+    else:
+        subscription_end = subscription_start + (30 * 24 * 60 * 60)  # Default 1 ay
 
     # OKX
     api_key = safe_str(request.form.get("api_key"))
