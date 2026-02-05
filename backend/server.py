@@ -24524,33 +24524,29 @@ def api_trade_execute():
     session["mode"] = "real"
     session["trade_mode"] = "real"
     if not session.get("logged_in"):
-        # --- SYNC_USERS_DEMO_BALANCE (auto-added) ---
-        # UI /api/real/balance => users.demo_balance okuyor. DEMO trade sonrası users.demo_balance'ı new_balance ile eşitle.
-        try:
-            import sqlite3
-            _uid = session.get("user_id")
-            _uname = session.get("username") or session.get("email") or session.get("user")
-            _nb = None
-            try:
-                _nb = float(new_balance)
-            except Exception:
-                _nb = None
-            if _nb is not None:
-                _con = sqlite3.connect(DB_PATH)
-                _cur = _con.cursor()
-                _updated = 0
-                if _uid is not None:
-                    _cur.execute("UPDATE users SET demo_balance=? WHERE id=? OR rowid=?", (_nb, _uid, _uid))
-                    _updated = _cur.rowcount or 0
-                if (not _updated) and _uname:
-                    _cur.execute("UPDATE users SET demo_balance=? WHERE username=? OR email=?", (_nb, str(_uname), str(_uname)))
-                _con.commit()
-                _con.close()
-        except Exception:
-            pass
-        # --- /SYNC_USERS_DEMO_BALANCE ---
         return jsonify({"ok": False, "error": "Login required"}), 401
+    
     user_id = session.get("user_id", 0)
+    
+    # SUBSCRIPTION CHECK - Real trade requires active paid subscription
+    sub_status = check_user_subscription(user_id)
+    j_temp = request.get_json(silent=True) or {}
+    requested_mode = str(j_temp.get("mode", "real")).lower()
+    
+    if requested_mode == "real" or requested_mode == "live":
+        if not sub_status.get("can_trade_real"):
+            if sub_status.get("type") == "trial":
+                return jsonify({
+                    "ok": False, 
+                    "error": "TRIAL_MODE",
+                    "message": "Deneme paketinde sadece DEMO işlem yapabilirsiniz. Gerçek işlem için ödeme yapmanız gerekiyor."
+                }), 403
+            else:
+                return jsonify({
+                    "ok": False, 
+                    "error": "SUBSCRIPTION_EXPIRED",
+                    "message": "Aboneliğiniz sona ermiş. Lütfen Ödeme Yönetimi sayfasından aboneliğinizi yenileyin."
+                }), 403
     
     j = request.get_json(silent=True) or {}
     coin = str(j.get("coin", "")).strip().upper()
