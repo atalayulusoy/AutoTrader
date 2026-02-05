@@ -20603,8 +20603,8 @@ def _ensure_exchange_api_keys_table(conn):
     """)
     conn.commit()
 
+@app.route('/api/exchange/config', methods=['POST'])
 @app.route('/api/exchange/save', methods=['POST'])
-
 def save_exchange_config():
     """Persist API keys; UI expects it to stay saved and show as connected."""
     try:
