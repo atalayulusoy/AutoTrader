@@ -15188,6 +15188,7 @@ def get_sidebar_html(active_item: str = "") -> str:
     is_admin = session.get('is_admin') or session.get('role') == 'admin'
     username = session.get('username') or session.get('display_name') or 'Kullanıcı'
     display_name = session.get('display_name') or username
+    current_mode = session.get('ui_mode', 'real')  # 'real' or 'demo'
     
     # Sidebar items - Emergent platform için /api/app/ prefix kullanılıyor
     items = [
@@ -15202,6 +15203,13 @@ def get_sidebar_html(active_item: str = "") -> str:
         ("payment", "/api/app/payment", "💳", "Ödeme Yönetimi"),
         ("exchange-api", "/api/app/exchange-api", "⚙️", "Borsa API"),
         ("health", "/api/app/system-health", "❤️", "Sistem Sağlığı"),
+    ]
+    
+    # Demo mode items - completely separate
+    demo_items = [
+        ("demo-dashboard", "/api/app/demo/dashboard", "🎮", "Demo Dashboard"),
+        ("demo-trades", "/api/app/demo/trades", "📈", "Demo İşlemler"),
+        ("demo-stats", "/api/app/demo/stats", "📊", "Demo İstatistikler"),
     ]
     
     links_html = ""
@@ -15220,6 +15228,17 @@ def get_sidebar_html(active_item: str = "") -> str:
         is_active = (active_item == tag)
         cls = "bg-blue-600 text-white font-medium" if is_active else "text-gray-400 hover:bg-gray-800 hover:text-white"
         links_html += f"""
+            <a href="{url}" class="sidebar-link flex items-center gap-3 px-3 py-2 rounded-lg transition-colors {cls}">
+                <span class="text-lg">{icon}</span> <span class="text-sm font-medium">{label}</span>
+            </a>
+        """
+    
+    # Demo Mode Section - Separate from Real
+    demo_links = ""
+    for tag, url, icon, label in demo_items:
+        is_active = (active_item == tag)
+        cls = "bg-purple-600 text-white font-medium" if is_active else "text-purple-400 hover:bg-purple-900/30 hover:text-purple-300"
+        demo_links += f"""
             <a href="{url}" class="sidebar-link flex items-center gap-3 px-3 py-2 rounded-lg transition-colors {cls}">
                 <span class="text-lg">{icon}</span> <span class="text-sm font-medium">{label}</span>
             </a>
@@ -15243,7 +15262,23 @@ def get_sidebar_html(active_item: str = "") -> str:
         </div>
         
         <nav class="flex-1 p-3 space-y-1 overflow-y-auto custom-scrollbar">
-            {links_html}
+            <!-- REAL MODE Section -->
+            <div class="mb-2">
+                <div class="flex items-center gap-2 px-2 py-1.5 text-xs uppercase tracking-wider text-green-500 font-bold border-b border-green-500/20 mb-2">
+                    <span class="w-2 h-2 bg-green-500 rounded-full animate-pulse"></span>
+                    REAL MOD
+                </div>
+                {links_html}
+            </div>
+            
+            <!-- DEMO MODE Section - Completely Separate -->
+            <div class="mt-4 pt-3 border-t border-purple-500/30">
+                <div class="flex items-center gap-2 px-2 py-1.5 text-xs uppercase tracking-wider text-purple-400 font-bold border-b border-purple-500/20 mb-2">
+                    <span class="w-2 h-2 bg-purple-500 rounded-full"></span>
+                    DEMO MOD (Sanal)
+                </div>
+                {demo_links}
+            </div>
         </nav>
         
         <div class="p-3 border-t border-white/10 bg-[#161616]">
