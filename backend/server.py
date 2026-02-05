@@ -35985,27 +35985,95 @@ def get_market_analysis(symbol, exchange_name='okx'):
     }
 
 def ai_should_sell(coin, entry_price, current_price, market_data=None):
-    """Google Gemini AI ile sell kararı al"""
+    """Google Gemini AI ile DETAYLI teknik analiz ve sell kararı"""
     try:
         profit_pct = ((current_price - entry_price) / entry_price) * 100
         
-        prompt = f"""Sen bir kripto trading uzmanısın. Aşağıdaki bilgilere göre SELL yapmalı mıyım yoksa HOLD mu etmeliyim?
+        # Detaylı piyasa analizi al
+        market = get_market_analysis(coin)
+        
+        if not market:
+            # Fallback: Basit kar kontrolü
+            if profit_pct >= 2.0:
+                return {'decision': 'SELL', 'reasoning': 'Fallback: 2%+ kar', 'profit_pct': profit_pct}
+            return {'decision': 'HOLD', 'reasoning': 'Fallback: Düşük kar', 'profit_pct': profit_pct}
+        
+        # AI'ya PROFESYONEL prompt
+        prompt = f"""Sen profesyonel bir kripto trader'sın. 15 yıllık tecrüben var. Aşağıdaki TEKNİK ANALİZ verilerine göre bu pozisyonu SELL mi HOLD mu etmeliyim?
 
+═══════════════════════════════════════════
+📊 POZİSYON BİLGİSİ
+═══════════════════════════════════════════
 Coin: {coin}
-Giriş Fiyatı: ${entry_price}
-Şu Anki Fiyat: ${current_price}
-Kar Yüzdesi: %{profit_pct:.2f}
+Giriş Fiyatı: ${entry_price:,.2f}
+Şu Anki Fiyat: ${current_price:,.2f}
+Kar/Zarar: %{profit_pct:.2f}
 
-Kurallar:
-1. %0.40 - %0.60 arası kar varsa ve fiyat düşme trendindeyse SELL
-2. Eğer fiyat yükseliş trendindeyse %1+ kar hedefle, HOLD
-3. %0.40'ın altındaysa kesinlikle HOLD
-4. %2+ kar varsa kesinlikle SELL (risk yönetimi)
+═══════════════════════════════════════════
+📈 TEKNİK İNDİKATÖRLER
+═══════════════════════════════════════════
+RSI (14): {market['rsi']:.1f} → {market['rsi_signal']}
+  • RSI < 30: Aşırı satım (yükseliş potansiyeli)
+  • RSI > 70: Aşırı alım (düşüş riski)
+  
+MACD: {market['macd']:.2f} → {market['macd_signal']}
+  • MACD > 0: Yukarı momentum
+  • MACD < 0: Aşağı momentum
 
-Cevabını şu formatta ver:
+Trend: {market['trend']} ({market['momentum']} momentum)
+
+Bollinger Bands:
+  • Üst Band: ${market['bb_upper']:,.2f}
+  • Alt Band: ${market['bb_lower']:,.2f}
+  • Pozisyon: {market['bb_position']}
+
+═══════════════════════════════════════════
+📊 ORDER BOOK (Alış/Satış Emri Analizi)
+═══════════════════════════════════════════
+Alış Baskısı: %{market['buy_pressure']:.1f}
+Satış Baskısı: %{market['sell_pressure']:.1f}
+Sinyal: {market['order_book_signal']}
+
+═══════════════════════════════════════════
+💰 VOLUME ANALİZİ
+═══════════════════════════════════════════
+Volume Artışı: x{market['volume_spike']:.2f}
+Durum: {market['volume_signal']}
+Piyasa Duygusu: {market['market_sentiment']}
+
+Son İşlem Alış/Satış Oranı: {market['buy_sell_ratio']:.2f}
+  • >1.5: Güçlü alım
+  • <0.7: Güçlü satım
+
+═══════════════════════════════════════════
+🎯 DESTEK/DİRENÇ SEVİYELERİ
+═══════════════════════════════════════════
+Destek: ${market['support']:,.2f}
+Direnç: ${market['resistance']:,.2f}
+Dirence Mesafe: %{market['distance_to_resistance']:.2f}
+
+═══════════════════════════════════════════
+🧠 KARAR KRİTERLERİ
+═══════════════════════════════════════════
+1. %0.40-%0.60 kar: Eğer RSI>70 veya MACD aşağı dönüyorsa SELL
+2. %0.60-%1.50 kar: Trend ve momentum kontrol et, zayıfsa SELL
+3. %1.50-%2.00 kar: Order book satış baskısı varsa SELL
+4. %2.00+ kar: KAR AL! (Risk yönetimi)
+
+ÖZEL DURUMLAR:
+• RSI < 30 + Yükseliş trendi → HOLD (daha fazla kar bekle)
+• Volume spike + Alış baskısı → HOLD (momentum devam edebilir)
+• Bollinger üst bandına yakın + RSI > 70 → SELL (düzeltme riski)
+• MACD yukarı + %1+ kar → HOLD (trend güçlü)
+
+═══════════════════════════════════════════
+📋 CEVAP FORMATI
+═══════════════════════════════════════════
 KARAR: SELL veya HOLD
-SEBEP: Kısa açıklama (1 cümle)
-TAHMİN: YUKSELIŞ veya DÜŞÜŞ"""
+GÜVEN: %XX (50-100 arası)
+NEDENİ: Hangi teknik indikatörler ve neden?
+TAHMİN: Sonraki 5 dakikada fiyat YÜKSELİR/DÜŞER/SABİT
+RİSK: DÜŞÜK/ORTA/YÜKSEK"""
 
         response = client.models.generate_content(
             model='gemini-1.5-flash',
@@ -36015,23 +36083,36 @@ TAHMİN: YUKSELIŞ veya DÜŞÜŞ"""
         
         # Response parse et
         decision = "HOLD"
+        confidence = 50
+        
         if "KARAR: SELL" in ai_response or "SELL" in ai_response.split('\n')[0]:
             decision = "SELL"
         
+        # Güven seviyesini çıkar
+        if "GÜVEN:" in ai_response:
+            try:
+                conf_line = [line for line in ai_response.split('\n') if 'GÜVEN:' in line][0]
+                confidence = int(''.join(filter(str.isdigit, conf_line)))
+            except:
+                confidence = 75
+        
         return {
             'decision': decision,
+            'confidence': confidence,
             'reasoning': ai_response,
-            'profit_pct': profit_pct
+            'profit_pct': profit_pct,
+            'market_analysis': market
         }
+        
     except Exception as e:
         print(f"[AI ERROR] {e}")
-        # Fallback: basit rule-based karar
+        # Fallback: basit rule-based
         profit_pct = ((current_price - entry_price) / entry_price) * 100
         if profit_pct >= 2.0:
-            return {'decision': 'SELL', 'reasoning': 'Auto: %2+ kar', 'profit_pct': profit_pct}
+            return {'decision': 'SELL', 'reasoning': 'Auto: %2+ kar', 'profit_pct': profit_pct, 'confidence': 100}
         elif profit_pct >= 0.50:
-            return {'decision': 'SELL', 'reasoning': 'Auto: %0.5+ kar', 'profit_pct': profit_pct}
-        return {'decision': 'HOLD', 'reasoning': 'Auto: Düşük kar', 'profit_pct': profit_pct}
+            return {'decision': 'SELL', 'reasoning': 'Auto: %0.5+ kar', 'profit_pct': profit_pct, 'confidence': 70}
+        return {'decision': 'HOLD', 'reasoning': 'Auto: Düşük kar', 'profit_pct': profit_pct, 'confidence': 60}
 
 # TradingView Webhook Endpoint
 @app.route('/api/tradingview/webhook', methods=['POST'])
