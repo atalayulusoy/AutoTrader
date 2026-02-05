@@ -5353,6 +5353,23 @@ LIVE_TRADING_CHAT_TEMPLATE = """
         renderRooms();
         renderMessages();
         renderMembers();
+        
+        // Update mobile selector
+        const mobileSelect = document.getElementById('mobileRoomSelect');
+        if (mobileSelect) {
+            const roomKey = room.name.toLowerCase().includes('genel') ? 'genel' : 
+                           room.name.toLowerCase().includes('sinyal') ? 'sinyaller' : 
+                           room.name.toLowerCase().includes('analiz') ? 'analiz' : 
+                           room.name.toLowerCase().includes('vip') ? 'vip' : 'genel';
+            mobileSelect.value = roomKey;
+        }
+    }
+    
+    // Mobile room switch function
+    function switchRoomMobile(roomKey) {
+        const roomMap = { 'genel': 1, 'sinyaller': 2, 'analiz': 3, 'vip': 4 };
+        const roomId = roomMap[roomKey] || 1;
+        switchRoom(roomId);
     }
 
     function sendMessage() {
