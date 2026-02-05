@@ -33614,8 +33614,26 @@ def api_auto_start_json():
         return jsonify({"ok": False, "error": "NO_USER_ID"}), 400
 
     data = request.get_json(silent=True) or {}
-    coin = data.get("coin") or data.get("symbol") or data.get("pair") or ""
     mode = data.get("mode") or session.get("mode") or "demo"
+    
+    # SUBSCRIPTION CHECK - Real auto trade requires active paid subscription
+    if mode == "real" or mode == "live":
+        sub_status = check_user_subscription(int(uid))
+        if not sub_status.get("can_trade_real"):
+            if sub_status.get("type") == "trial":
+                return jsonify({
+                    "ok": False, 
+                    "error": "TRIAL_MODE",
+                    "message": "Deneme paketinde sadece DEMO auto işlem ekleyebilirsiniz. Gerçek işlem için ödeme yapmanız gerekiyor."
+                }), 403
+            else:
+                return jsonify({
+                    "ok": False, 
+                    "error": "SUBSCRIPTION_EXPIRED",
+                    "message": "Aboneliğiniz sona ermiş. Lütfen Ödeme Yönetimi sayfasından aboneliğinizi yenileyin."
+                }), 403
+
+    coin = data.get("coin") or data.get("symbol") or data.get("pair") or ""
     amount = data.get("amount_usdt") or data.get("amount") or 0
     target = data.get("target_pct")
 
