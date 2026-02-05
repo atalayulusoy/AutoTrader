@@ -21105,7 +21105,7 @@ def list_exchange_config():
 @app.route('/api/app/education')
 @app.route('/api/app/admin/education')
 def page_education():
-    return render_template_string(EDUCATION_TEMPLATE)
+    return render_template_string(EDUCATION_TEMPLATE, sidebar=get_sidebar_html("education"))
 
 @app.route('/portfolio')
 @app.route('/portfolio-analytics')
