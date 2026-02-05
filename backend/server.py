@@ -37256,6 +37256,36 @@ document.addEventListener('DOMContentLoaded', function() {
     loadDemoPositions();
     setInterval(loadDemoPositions, 5000);
 });
+
+// Demo trade open function
+async function openDemoTrade() {
+    const symbol = document.getElementById('demoTradeSymbol').value;
+    const amount = parseFloat(document.getElementById('demoTradeAmount').value);
+    const side = document.getElementById('demoTradeSide').value;
+    
+    if (!symbol || !amount || amount < 100) {
+        alert('Lütfen geçerli bir miktar girin (min 100 TL)');
+        return;
+    }
+    
+    try {
+        const res = await fetch('/api/demo/trade/open', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            credentials: 'include',
+            body: JSON.stringify({symbol, amount, side})
+        });
+        const data = await res.json();
+        if (data.ok) {
+            alert('✅ Demo işlem açıldı! İşlem otomatik olarak sonuçlanacak.');
+            location.reload();
+        } else {
+            alert('❌ Hata: ' + (data.error || 'İşlem açılamadı'));
+        }
+    } catch (e) {
+        alert('❌ Bağlantı hatası');
+    }
+}
 </script>
 {% endblock %}
 """
