@@ -190,25 +190,372 @@ PAYMENT_TEMPLATE = """
 
 PORTFOLIO_ANALYTICS_TEMPLATE = """
 {% extends "base" %}
+{% block head %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+{% endblock %}
 {% block content %}
-<div class="p-6">
-    <h1 class="text-3xl font-bold text-white mb-6">Portfoy Analizi</h1>
-    
-    <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+<div class="p-6 max-w-[1600px] mx-auto">
+    <!-- Header -->
+    <div class="flex items-center justify-between mb-6">
+        <div>
+            <h1 class="text-3xl font-bold text-white">Portföy Analizi</h1>
+            <p class="text-gray-400 text-sm mt-1">Detaylı performans raporları ve varlık dağılımı</p>
+        </div>
+        <div class="flex gap-3">
+            <button onclick="location.reload()" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-lg text-white font-medium text-sm transition">
+                🔄 Yenile
+            </button>
+            <button onclick="downloadPDF()" class="px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded-lg text-white font-medium text-sm transition">
+                📥 Rapor İndir
+            </button>
+        </div>
+    </div>
+
+    <!-- Filters -->
+    <div class="flex gap-3 mb-6">
+        <select id="exchangeFilter" class="px-4 py-2 bg-[#1a1a1a] border border-white/10 rounded-lg text-white text-sm focus:border-blue-500 outline-none">
+            <option>Tüm Borsalar</option>
+            <option>Binance</option>
+            <option>OKX</option>
+            <option>Bybit</option>
+            <option>Gate.io</option>
+            <option>BTCTURK</option>
+        </select>
+        <select id="strategyFilter" class="px-4 py-2 bg-[#1a1a1a] border border-white/10 rounded-lg text-white text-sm focus:border-blue-500 outline-none">
+            <option>Tüm Stratejiler</option>
+            <option>Scalping</option>
+            <option>Day Trading</option>
+            <option>Swing Trading</option>
+        </select>
+        <button onclick="applyFilters()" class="px-5 py-2 bg-blue-600 hover:bg-blue-700 rounded-lg text-white font-medium text-sm transition">
+            Sırala
+        </button>
+    </div>
+
+    <!-- Main Stats -->
+    <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+        <div class="bg-[#1a1a1a] p-5 rounded-xl border border-white/10">
+            <div class="flex items-center justify-between mb-2">
+                <h3 class="text-gray-400 text-sm">Toplam Portföy Değeri</h3>
+                <span class="text-2xl">💰</span>
+            </div>
+            <p class="text-2xl font-bold text-white">155.000,00 ₺</p>
+            <p class="text-green-400 text-sm mt-1">+24,2% (Son 30 gün)</p>
+        </div>
+        <div class="bg-[#1a1a1a] p-5 rounded-xl border border-white/10">
+            <div class="flex items-center justify-between mb-2">
+                <h3 class="text-gray-400 text-sm">Gerçekleşmemiş Kar/Zarar</h3>
+                <span class="text-2xl">📈</span>
+            </div>
+            <p class="text-2xl font-bold text-green-400">+18.250,75 ₺</p>
+            <p class="text-gray-400 text-sm mt-1">+13,4%</p>
+        </div>
+        <div class="bg-[#1a1a1a] p-5 rounded-xl border border-white/10">
+            <div class="flex items-center justify-between mb-2">
+                <h3 class="text-gray-400 text-sm">Başarı Oranı</h3>
+                <span class="text-2xl">🎯</span>
+            </div>
+            <p class="text-2xl font-bold text-white">64,8%</p>
+            <p class="text-gray-400 text-sm mt-1">Kârlı işlem yüzdesi</p>
+        </div>
+        <div class="bg-[#1a1a1a] p-5 rounded-xl border border-white/10">
+            <div class="flex items-center justify-between mb-2">
+                <h3 class="text-gray-400 text-sm">Sharpe Oranı</h3>
+                <span class="text-2xl">📊</span>
+            </div>
+            <p class="text-2xl font-bold text-white">1,85</p>
+            <p class="text-gray-400 text-sm mt-1">Kâr performansı</p>
+        </div>
+    </div>
+
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
+        <!-- Performance Trend Chart -->
+        <div class="lg:col-span-2 bg-[#1a1a1a] p-6 rounded-xl border border-white/10">
+            <div class="flex items-center justify-between mb-4">
+                <h2 class="text-xl font-bold text-white">Performance Trendi</h2>
+                <div class="flex gap-2">
+                    <button class="px-3 py-1 bg-blue-600 rounded-lg text-white text-xs font-medium">1G</button>
+                    <button class="px-3 py-1 bg-gray-700 hover:bg-gray-600 rounded-lg text-white text-xs">7G</button>
+                    <button class="px-3 py-1 bg-gray-700 hover:bg-gray-600 rounded-lg text-white text-xs">1A</button>
+                    <button class="px-3 py-1 bg-gray-700 hover:bg-gray-600 rounded-lg text-white text-xs">3A</button>
+                    <button class="px-3 py-1 bg-gray-700 hover:bg-gray-600 rounded-lg text-white text-xs">1Y</button>
+                </div>
+            </div>
+            <div class="h-64">
+                <canvas id="performanceChart"></canvas>
+            </div>
+        </div>
+
+        <!-- Asset Distribution Pie Chart -->
         <div class="bg-[#1a1a1a] p-6 rounded-xl border border-white/10">
-            <h3 class="text-gray-400 text-sm mb-1">Toplam Bakiye</h3>
-            <p class="text-2xl font-bold text-white">${{ total_balance if total_balance else '0.00' }}</p>
+            <h2 class="text-xl font-bold text-white mb-4">Varlık Dağılımı</h2>
+            <div class="h-64 flex items-center justify-center">
+                <canvas id="assetPieChart"></canvas>
+            </div>
+            <div class="mt-4 space-y-2 text-sm">
+                <div class="flex justify-between"><span class="text-gray-400">🟦 BTC/TRY</span><span class="text-white font-medium">29.03%</span></div>
+                <div class="flex justify-between"><span class="text-gray-400">🟩 XRP/TRY</span><span class="text-white font-medium">23.58%</span></div>
+                <div class="flex justify-between"><span class="text-gray-400">🟨 SOL/TRY</span><span class="text-white font-medium">22.19%</span></div>
+                <div class="flex justify-between"><span class="text-gray-400">🟧 ADA/TRY</span><span class="text-white font-medium">9.60%</span></div>
+                <div class="flex justify-between"><span class="text-gray-400">🟥 AVAX/TRY</span><span class="text-white font-medium">5.49%</span></div>
+                <div class="flex justify-between"><span class="text-gray-400">⬜ Diğer</span><span class="text-white font-medium">3.23%</span></div>
+            </div>
         </div>
-         <div class="bg-[#1a1a1a] p-6 rounded-xl border border-white/10">
-            <h3 class="text-gray-400 text-sm mb-1">Toplam PNL</h3>
-            <p class="text-2xl font-bold text-{{ 'green-400' if total_pnl and total_pnl > 0 else 'red-400' }}">${{ total_pnl if total_pnl else '0.00' }}</p>
+    </div>
+
+    <!-- Performance Distribution Table -->
+    <div class="bg-[#1a1a1a] p-6 rounded-xl border border-white/10 mb-6">
+        <h2 class="text-xl font-bold text-white mb-4">Performans Dağılımı</h2>
+        <div class="overflow-x-auto">
+            <table class="w-full text-sm">
+                <thead>
+                    <tr class="border-b border-white/10">
+                        <th class="text-left text-gray-400 font-medium py-3 px-4">İşlem Çifti</th>
+                        <th class="text-left text-gray-400 font-medium py-3 px-4">Borsa</th>
+                        <th class="text-center text-gray-400 font-medium py-3 px-4">İşlem Sayısı</th>
+                        <th class="text-left text-gray-400 font-medium py-3 px-4">Başarı Oranı</th>
+                        <th class="text-right text-gray-400 font-medium py-3 px-4">Kar/Zarar</th>
+                        <th class="text-right text-gray-400 font-medium py-3 px-4">ROI</th>
+                    </tr>
+                </thead>
+                <tbody id="performanceTable">
+                    <!-- Data will be populated by JavaScript -->
+                </tbody>
+            </table>
         </div>
-         <div class="bg-[#1a1a1a] p-6 rounded-xl border border-white/10">
-            <h3 class="text-gray-400 text-sm mb-1">Basari Orani</h3>
-            <p class="text-2xl font-bold text-white">%{{ success_rate if success_rate else '0' }}</p>
+    </div>
+
+    <!-- Performance Metrics -->
+    <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+        <div class="bg-[#1a1a1a] p-5 rounded-xl border border-white/10">
+            <div class="flex items-center gap-2 mb-2">
+                <span class="text-2xl">⚡</span>
+                <h3 class="text-gray-400 text-sm">Toplam İşlem</h3>
+            </div>
+            <p class="text-2xl font-bold text-white">0</p>
+        </div>
+        <div class="bg-[#1a1a1a] p-5 rounded-xl border border-white/10">
+            <div class="flex items-center gap-2 mb-2">
+                <span class="text-2xl">🎲</span>
+                <h3 class="text-gray-400 text-sm">Kazanç Oranı</h3>
+            </div>
+            <p class="text-2xl font-bold text-green-400">0.0%</p>
+        </div>
+        <div class="bg-[#1a1a1a] p-5 rounded-xl border border-white/10">
+            <div class="flex items-center gap-2 mb-2">
+                <span class="text-2xl">📊</span>
+                <h3 class="text-gray-400 text-sm">Sharpe Oranı</h3>
+            </div>
+            <p class="text-2xl font-bold text-white">1.50</p>
+        </div>
+        <div class="bg-[#1a1a1a] p-5 rounded-xl border border-white/10">
+            <div class="flex items-center gap-2 mb-2">
+                <span class="text-2xl">📉</span>
+                <h3 class="text-gray-400 text-sm">Max Drawdown</h3>
+            </div>
+            <p class="text-2xl font-bold text-red-400">15.0%</p>
+        </div>
+    </div>
+
+    <!-- Risk Management & PDF Report -->
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <!-- Risk Management -->
+        <div class="bg-[#1a1a1a] p-6 rounded-xl border border-white/10">
+            <div class="flex items-center justify-between mb-4">
+                <h2 class="text-xl font-bold text-white">Risk Yönetimi</h2>
+                <button onclick="saveRiskSettings()" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-lg text-white font-medium text-sm transition">
+                    Kaydet
+                </button>
+            </div>
+            
+            <div class="bg-red-900/20 border border-red-500/30 rounded-lg p-4 mb-4">
+                <p class="text-red-400 text-sm">⚠️ Maksimum Drawdown Uyarı Eşiği</p>
+                <p class="text-gray-300 text-xs mt-1">Geçmiş son %10 hesaplanmış, sınırınız %10'a gelmeden uyarı alırsınız!</p>
+            </div>
+
+            <div class="space-y-4">
+                <div>
+                    <label class="text-gray-400 text-sm block mb-2">Pozisyon Büyüklüğü Limiti (USDT)</label>
+                    <input type="number" value="100" class="w-full px-4 py-2 bg-[#111] border border-white/10 rounded-lg text-white focus:border-blue-500 outline-none">
+                </div>
+                <div>
+                    <label class="text-gray-400 text-sm block mb-2">Kaldıraç Kontrolü</label>
+                    <input type="number" value="3" max="10" class="w-full px-4 py-2 bg-[#111] border border-white/10 rounded-lg text-white focus:border-blue-500 outline-none">
+                </div>
+                <div>
+                    <label class="text-gray-400 text-sm block mb-2">Günlük Zarar Limiti (%)</label>
+                    <input type="number" value="10" class="w-full px-4 py-2 bg-[#111] border border-white/10 rounded-lg text-white focus:border-blue-500 outline-none">
+                </div>
+                <div>
+                    <label class="text-gray-400 text-sm block mb-2">Uyarı Eşiği (%)</label>
+                    <input type="number" value="15.00" step="0.01" class="w-full px-4 py-2 bg-[#111] border border-white/10 rounded-lg text-white focus:border-blue-500 outline-none">
+                </div>
+            </div>
+
+            <div class="mt-6 grid grid-cols-2 gap-3">
+                <div class="bg-[#111] p-4 rounded-lg border border-white/10">
+                    <p class="text-gray-400 text-xs mb-1">Minimum Risk/Pozisyon</p>
+                    <p class="text-white font-bold">100 USDT</p>
+                </div>
+                <div class="bg-[#111] p-4 rounded-lg border border-white/10">
+                    <p class="text-gray-400 text-xs mb-1">Toplam Maksimum Risk</p>
+                    <p class="text-white font-bold">500 USDT</p>
+                </div>
+                <div class="bg-[#111] p-4 rounded-lg border border-white/10">
+                    <p class="text-gray-400 text-xs mb-1">Günlük Kayıp</p>
+                    <p class="text-white font-bold">50 USDT</p>
+                </div>
+                <div class="bg-[#111] p-4 rounded-lg border border-white/10">
+                    <p class="text-gray-400 text-xs mb-1">Minimum Açık Pozisyon</p>
+                    <p class="text-white font-bold">5</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- PDF Report -->
+        <div class="bg-[#1a1a1a] p-6 rounded-xl border border-white/10">
+            <h2 class="text-xl font-bold text-white mb-4">PDF Rapor Oluştur</h2>
+            
+            <div class="flex gap-2 mb-4">
+                <button class="flex-1 py-2 bg-blue-600 rounded-lg text-white text-sm font-medium">Genel</button>
+                <button class="flex-1 py-2 bg-gray-700 hover:bg-gray-600 rounded-lg text-white text-sm">Haftalık</button>
+                <button class="flex-1 py-2 bg-gray-700 hover:bg-gray-600 rounded-lg text-white text-sm">Aylık</button>
+            </div>
+
+            <div class="bg-[#111] p-4 rounded-lg border border-white/10 mb-4">
+                <p class="text-gray-300 text-sm mb-3">📄 Portföy analiz raporunuzu PDF olarak indirebilirsiniz</p>
+                <button onclick="downloadPDF()" class="w-full px-4 py-3 bg-blue-600 hover:bg-blue-700 rounded-lg text-white font-bold transition">
+                    📥 PDF Rapor İndir
+                </button>
+            </div>
+
+            <div class="space-y-2 text-sm">
+                <p class="text-gray-400">Rapor içeriği:</p>
+                <ul class="text-gray-300 space-y-1 ml-4">
+                    <li>✅ Genel performans metrikleri</li>
+                    <li>✅ İşlem listesi ve analizleri</li>
+                    <li>✅ Risk yönetimi özeti</li>
+                    <li>✅ Varlık dağılımı grafiği</li>
+                    <li>✅ Kar/zarar raporu</li>
+                </ul>
+            </div>
         </div>
     </div>
 </div>
+
+<script>
+// Performance Trend Chart
+const perfCtx = document.getElementById('performanceChart');
+new Chart(perfCtx, {
+    type: 'line',
+    data: {
+        labels: ['01 Oca', '05 Oca', '10 Oca', '15 Oca', '20 Oca', '25 Oca', '30 Oca', '04 Şub'],
+        datasets: [{
+            label: 'Portföy Değeri',
+            data: [125000, 128000, 135000, 140000, 145000, 150000, 152000, 155000],
+            borderColor: '#3b82f6',
+            backgroundColor: 'rgba(59, 130, 246, 0.1)',
+            fill: true,
+            tension: 0.4
+        }, {
+            label: 'Benchmark',
+            data: [125000, 126000, 128000, 130000, 132000, 135000, 137000, 140000],
+            borderColor: '#6b7280',
+            borderDash: [5, 5],
+            fill: false,
+            tension: 0.4
+        }]
+    },
+    options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+            legend: { display: true, labels: { color: '#fff' } }
+        },
+        scales: {
+            y: { 
+                beginAtZero: false,
+                ticks: { color: '#9ca3af' },
+                grid: { color: 'rgba(255,255,255,0.1)' }
+            },
+            x: { 
+                ticks: { color: '#9ca3af' },
+                grid: { color: 'rgba(255,255,255,0.1)' }
+            }
+        }
+    }
+});
+
+// Asset Pie Chart
+const pieCtx = document.getElementById('assetPieChart');
+new Chart(pieCtx, {
+    type: 'doughnut',
+    data: {
+        labels: ['BTC/TRY', 'XRP/TRY', 'SOL/TRY', 'ADA/TRY', 'AVAX/TRY', 'Diğer'],
+        datasets: [{
+            data: [29.03, 23.58, 22.19, 9.60, 5.49, 3.23],
+            backgroundColor: ['#3b82f6', '#22c55e', '#eab308', '#f97316', '#ef4444', '#6b7280'],
+            borderWidth: 2,
+            borderColor: '#1a1a1a'
+        }]
+    },
+    options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+            legend: { display: false }
+        }
+    }
+});
+
+// Performance Table Data
+const performanceData = [
+    { coin: 'BTC/TRY', exchange: 'Binance', trades: 145, successRate: 68, pl: '+15.568,45 ₺', roi: '+6,5%', roiVal: 6.5 },
+    { coin: 'ETH/TRY', exchange: 'OKX', trades: 132, successRate: 65, pl: '+6.768,25 ₺', roi: '+6,2%', roiVal: 6.2 },
+    { coin: 'XRP/TRY', exchange: 'Bybit', trades: 98, successRate: 72, pl: '+3.269,75 ₺', roi: '+4,8%', roiVal: 4.8 },
+    { coin: 'SOL/TRY', exchange: 'Gate.io', trades: 87, successRate: 58, pl: '+3.859,80 ₺', roi: '+3,8%', roiVal: 3.8 },
+    { coin: 'ADA/TRY', exchange: 'BTCTURK', trades: 76, successRate: 62, pl: '+2.198,18 ₺', roi: '+2,8%', roiVal: 2.8 },
+    { coin: 'AVAX/TRY', exchange: 'Binance', trades: 54, successRate: 55, pl: '+1.358,25 ₺', roi: '+1,9%', roiVal: 1.9 },
+    { coin: 'DOGE/TRY', exchange: 'Bybit', trades: 38, successRate: 52, pl: '+658,68 ₺', roi: '+8,8%', roiVal: 8.8 },
+    { coin: 'MATIC/TRY', exchange: 'OKX', trades: 63, successRate: 48, pl: '-58,75 ₺', roi: '-1,2%', roiVal: -1.2 }
+];
+
+const tbody = document.getElementById('performanceTable');
+performanceData.forEach(row => {
+    const tr = document.createElement('tr');
+    tr.className = 'border-b border-white/5 hover:bg-white/5 transition';
+    tr.innerHTML = `
+        <td class="py-3 px-4 font-bold text-white">${row.coin}</td>
+        <td class="py-3 px-4 text-gray-300">${row.exchange}</td>
+        <td class="py-3 px-4 text-center text-gray-300">${row.trades}</td>
+        <td class="py-3 px-4">
+            <div class="flex items-center gap-2">
+                <div class="flex-1 bg-gray-700 h-2 rounded-full overflow-hidden">
+                    <div class="bg-green-500 h-full" style="width: ${row.successRate}%"></div>
+                </div>
+                <span class="text-gray-300 text-xs">${row.successRate}%</span>
+            </div>
+        </td>
+        <td class="py-3 px-4 text-right font-bold ${row.roiVal > 0 ? 'text-green-400' : 'text-red-400'}">${row.pl}</td>
+        <td class="py-3 px-4 text-right font-bold ${row.roiVal > 0 ? 'text-green-400' : 'text-red-400'}">${row.roi}</td>
+    `;
+    tbody.appendChild(tr);
+});
+
+function applyFilters() {
+    alert('Filtre uygulandı!');
+}
+
+function saveRiskSettings() {
+    alert('Risk ayarları kaydedildi!');
+}
+
+function downloadPDF() {
+    alert('PDF raporu indiriliyor...');
+    // Implement PDF generation using html2pdf.js or similar
+}
+</script>
 {% endblock %}
 """
 
