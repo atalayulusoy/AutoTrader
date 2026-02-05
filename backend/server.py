@@ -36868,8 +36868,10 @@ except Exception as e:
 # ==================== END TRADINGVIEW WEBHOOK + AI AUTO TRADING ====================
 
 
-# Wrap Flask WSGI app for ASGI compatibility (uvicorn)
-from asgiref.wsgi import WsgiToAsgi
-_flask_wsgi_app = app
-app = WsgiToAsgi(_flask_wsgi_app)
+# NOTE: For Gunicorn (WSGI), use app directly
+# For Uvicorn (ASGI), uncomment the lines below:
+# from asgiref.wsgi import WsgiToAsgi
+# _flask_wsgi_app = app
+# app = WsgiToAsgi(_flask_wsgi_app)
+
 
