@@ -36911,12 +36911,10 @@ except Exception as e:
 # ==================== END TRADINGVIEW WEBHOOK + AI AUTO TRADING ====================
 
 
-# Automatic WSGI/ASGI detection based on environment
-import os
-if os.environ.get('EMERGENT_ENV') or os.environ.get('UVICORN_RUNNING'):
-    # Emergent platform uses Uvicorn (ASGI)
-    from asgiref.wsgi import WsgiToAsgi
-    _flask_wsgi_app = app
-    app = WsgiToAsgi(_flask_wsgi_app)
-# else: Gunicorn (WSGI) - use Flask app directly
+# WSGI/ASGI wrapper for compatibility
+# For Emergent/Uvicorn: ASGI wrapper needed
+# For user's server (Gunicorn): Comment out these 3 lines
+from asgiref.wsgi import WsgiToAsgi
+_flask_wsgi_app = app
+app = WsgiToAsgi(_flask_wsgi_app)
 
