@@ -6699,9 +6699,7 @@ NOT_FOUND_TEMPLATE = """
 # Flask
 # =========================
 import jinja2
-from asgiref.wsgi import WsgiToAsgi
-
-flask_app = Flask(__name__)
+app = Flask(__name__)
 
 
 ### __AU_ENDPOINTS_V1
@@ -35448,6 +35446,8 @@ except Exception:
 # These were duplicate and causing AssertionError
 # Original routes are defined earlier in the file (line 20349-20400)
 
-# Export app_asgi as 'app' for uvicorn compatibility
-app = app_asgi
+# Wrap Flask WSGI app for ASGI compatibility (uvicorn)
+from asgiref.wsgi import WsgiToAsgi
+_flask_wsgi_app = app
+app = WsgiToAsgi(_flask_wsgi_app)
 
