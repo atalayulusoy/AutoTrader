@@ -32,3 +32,7 @@ server.py.BAK*
 server.py.BACKUP*
 data.db.BAK*
 data.db.BACKUP*
+-e 
+# Environment files
+*.env
+*.env.*
