@@ -13198,6 +13198,42 @@ def init_db() -> None:
         created_at INTEGER NOT NULL DEFAULT 0
     )
     """)
+    
+    # Auto positions table (TradingView webhook + AI trading)
+    cur.execute("""
+    CREATE TABLE IF NOT EXISTS auto_positions (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER,
+        username TEXT NOT NULL DEFAULT '',
+        coin TEXT NOT NULL DEFAULT '',
+        amount_usdt REAL DEFAULT 10,
+        target_pct REAL DEFAULT 0.0,
+        status TEXT DEFAULT 'waiting',
+        mode TEXT DEFAULT 'demo',
+        created_at TEXT,
+        entry_price REAL DEFAULT 0.0,
+        current_price REAL DEFAULT 0.0,
+        pnl REAL DEFAULT 0.0,
+        entry_at TEXT DEFAULT '',
+        exit_at TEXT DEFAULT '',
+        exchange_id TEXT NOT NULL DEFAULT 'OKX'
+    )
+    """)
+    # Auto positions safe ALTER for existing columns
+    for _auto_col_sql in [
+        "ALTER TABLE auto_positions ADD COLUMN target_pct REAL DEFAULT 0.0",
+        "ALTER TABLE auto_positions ADD COLUMN entry_price REAL DEFAULT 0.0",
+        "ALTER TABLE auto_positions ADD COLUMN current_price REAL DEFAULT 0.0",
+        "ALTER TABLE auto_positions ADD COLUMN pnl REAL DEFAULT 0.0",
+        "ALTER TABLE auto_positions ADD COLUMN entry_at TEXT DEFAULT ''",
+        "ALTER TABLE auto_positions ADD COLUMN exit_at TEXT DEFAULT ''",
+        "ALTER TABLE auto_positions ADD COLUMN username TEXT NOT NULL DEFAULT ''",
+        "ALTER TABLE auto_positions ADD COLUMN exchange_id TEXT NOT NULL DEFAULT 'OKX'",
+    ]:
+        try:
+            cur.execute(_auto_col_sql)
+        except Exception:
+            pass
 
     
     ensure_paper_test_schema(conn)
