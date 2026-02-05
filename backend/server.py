@@ -36121,7 +36121,7 @@ def get_multi_exchange_prices(symbol):
 
 # AI Auto Sell Background Task
 def ai_auto_sell_daemon():
-    """Günde 15-16 kere çalışan AI auto sell kontrolü"""
+    """Real-time AI auto sell kontrolü (her 5 saniye)"""
     import threading, time
     
     def run():
@@ -36140,28 +36140,44 @@ def ai_auto_sell_daemon():
                             continue
                         
                         current_price = price_data['best_sell']['price']
+                        profit_pct = ((current_price - pos['entry_price']) / pos['entry_price']) * 100
                         
-                        # AI'dan karar al
-                        ai_decision = ai_should_sell(
-                            pos['coin'], 
-                            pos['entry_price'], 
-                            current_price
-                        )
-                        
-                        if ai_decision['decision'] == 'SELL':
-                            # Otomatik SELL
+                        # HIZLI KARAR: %2+ kar varsa direkt sat (AI'ya sormadan)
+                        if profit_pct >= 2.0:
                             exit_price = current_price
-                            pnl = ai_decision['profit_pct']
-                            
                             conn.execute("""
                                 UPDATE auto_positions 
                                 SET status = 'closed', current_price = ?, pnl = ?, exit_at = ?
                                 WHERE id = ?
-                            """, (exit_price, pnl, datetime.now().isoformat(), pos['id']))
+                            """, (exit_price, profit_pct, datetime.now().isoformat(), pos['id']))
                             conn.commit()
+                            print(f"[FAST SELL] {pos['coin']} sold at ${exit_price}, PNL: {profit_pct:.2f}% (Auto: 2%+ rule)")
+                            continue
+                        
+                        # %0.5-2% arası: AI'dan karar al
+                        if profit_pct >= 0.5:
+                            ai_decision = ai_should_sell(
+                                pos['coin'], 
+                                pos['entry_price'], 
+                                current_price
+                            )
                             
-                            print(f"[AI SELL] {pos['coin']} sold at ${exit_price}, PNL: {pnl:.2f}%")
-                            print(f"[AI REASONING] {ai_decision['reasoning']}")
+                            if ai_decision['decision'] == 'SELL':
+                                # Otomatik SELL
+                                exit_price = current_price
+                                pnl = ai_decision['profit_pct']
+                                
+                                conn.execute("""
+                                    UPDATE auto_positions 
+                                    SET status = 'closed', current_price = ?, pnl = ?, exit_at = ?
+                                    WHERE id = ?
+                                """, (exit_price, pnl, datetime.now().isoformat(), pos['id']))
+                                conn.commit()
+                                
+                                print(f"[AI SELL] {pos['coin']} sold at ${exit_price}, PNL: {pnl:.2f}%")
+                                print(f"[AI REASONING] {ai_decision['reasoning']}")
+                        # else: %0.5'in altında, HOLD (bekle)
+                        
                     except Exception as e:
                         print(f"[AI SELL ERROR] Position {pos['id']}: {e}")
                         continue
@@ -36169,12 +36185,12 @@ def ai_auto_sell_daemon():
             except Exception as e:
                 print(f"[AI DAEMON ERROR] {e}")
             
-            # Her 10 saniyede bir kontrol et (çok agresif, real-time trading)
-            time.sleep(10)
+            # Her 5 saniyede bir kontrol et (anlık fiyat yakalama için)
+            time.sleep(5)
     
     t = threading.Thread(target=run, name="ai_auto_sell_daemon", daemon=True)
     t.start()
-    print("[AI DAEMON] Started - checking every 10 seconds (real-time mode)")
+    print("[AI DAEMON] Started - Real-time mode: checking every 5 seconds")
 
 # Daemon'u başlat
 try:
