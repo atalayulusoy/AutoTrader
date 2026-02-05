@@ -36946,6 +36946,631 @@ except Exception as e:
 # ==================== END TRADINGVIEW WEBHOOK + AI AUTO TRADING ====================
 
 
+# ==================== DEMO MODE - COMPLETELY SEPARATE SYSTEM ====================
+# WARNING: Demo mode uses completely separate tables and endpoints
+# NEVER mix demo with real mode - they are isolated systems
+
+DEMO_INITIAL_BALANCE = 100000.0  # 100,000 TL
+
+def init_demo_tables():
+    """Initialize demo-specific tables - SEPARATE from real tables"""
+    conn = db()
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS demo_trades_isolated (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
+            symbol TEXT NOT NULL,
+            side TEXT NOT NULL,
+            amount REAL NOT NULL,
+            entry_price REAL NOT NULL,
+            exit_price REAL,
+            pnl REAL DEFAULT 0,
+            status TEXT DEFAULT 'open',
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            closed_at TIMESTAMP
+        )
+    """)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS demo_balance_isolated (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER UNIQUE NOT NULL,
+            balance REAL DEFAULT 100000.0,
+            total_profit REAL DEFAULT 0,
+            total_loss REAL DEFAULT 0,
+            total_trades INTEGER DEFAULT 0,
+            winning_trades INTEGER DEFAULT 0,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS demo_daily_stats (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
+            date TEXT NOT NULL,
+            trades_count INTEGER DEFAULT 0,
+            profit REAL DEFAULT 0,
+            loss REAL DEFAULT 0,
+            UNIQUE(user_id, date)
+        )
+    """)
+    conn.commit()
+    conn.close()
+
+# Initialize demo tables on startup
+try:
+    init_demo_tables()
+    print("[DEMO] Demo tables initialized")
+except Exception as e:
+    print(f"[DEMO] Table init error: {e}")
+
+
+def get_demo_balance_isolated(user_id: int) -> dict:
+    """Get demo balance - COMPLETELY SEPARATE from real balance"""
+    conn = db()
+    row = conn.execute(
+        "SELECT balance, total_profit, total_loss, total_trades, winning_trades FROM demo_balance_isolated WHERE user_id=?",
+        (user_id,)
+    ).fetchone()
+    
+    if not row:
+        # Create new demo account with 100K TL
+        conn.execute(
+            "INSERT INTO demo_balance_isolated (user_id, balance) VALUES (?, ?)",
+            (user_id, DEMO_INITIAL_BALANCE)
+        )
+        conn.commit()
+        conn.close()
+        return {
+            "balance": DEMO_INITIAL_BALANCE,
+            "total_profit": 0,
+            "total_loss": 0,
+            "total_trades": 0,
+            "winning_trades": 0,
+            "win_rate": 0
+        }
+    
+    conn.close()
+    total_trades = row[3] or 0
+    winning = row[4] or 0
+    return {
+        "balance": row[0],
+        "total_profit": row[1] or 0,
+        "total_loss": row[2] or 0,
+        "total_trades": total_trades,
+        "winning_trades": winning,
+        "win_rate": (winning / total_trades * 100) if total_trades > 0 else 0
+    }
+
+
+# Demo Dashboard Template
+DEMO_DASHBOARD_TEMPLATE = """
+{% extends "base" %}
+{% block head %}
+<style>
+    .demo-badge { background: linear-gradient(135deg, #9333ea, #7c3aed); }
+</style>
+{% endblock %}
+{% block content %}
+<div class="min-h-screen p-6">
+    <!-- Demo Mode Warning Banner -->
+    <div class="bg-purple-900/30 border border-purple-500/50 rounded-xl p-4 mb-6 flex items-center gap-4">
+        <div class="w-12 h-12 rounded-full bg-purple-600 flex items-center justify-center text-2xl">🎮</div>
+        <div>
+            <h2 class="text-purple-300 font-bold text-lg">DEMO MOD AKTİF</h2>
+            <p class="text-purple-400/80 text-sm">Bu modda yapılan işlemler GERÇEK DEĞİLDİR. Sanal para ile pratik yapıyorsunuz.</p>
+        </div>
+    </div>
+
+    <!-- Demo Stats Cards -->
+    <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+        <div class="bg-[#1a1a1a] p-5 rounded-xl border border-purple-500/30">
+            <div class="flex items-center justify-between mb-2">
+                <h3 class="text-purple-400 text-sm">Demo Bakiye</h3>
+                <span class="text-2xl">💰</span>
+            </div>
+            <p id="demo-balance" class="text-2xl font-bold text-white">{{ "%.2f"|format(balance) }} TL</p>
+            <p class="text-purple-400/60 text-xs mt-1">Başlangıç: 100,000 TL</p>
+        </div>
+        <div class="bg-[#1a1a1a] p-5 rounded-xl border border-green-500/30">
+            <div class="flex items-center justify-between mb-2">
+                <h3 class="text-green-400 text-sm">Toplam Kar</h3>
+                <span class="text-2xl">📈</span>
+            </div>
+            <p id="demo-profit" class="text-2xl font-bold text-green-400">+{{ "%.2f"|format(total_profit) }} TL</p>
+        </div>
+        <div class="bg-[#1a1a1a] p-5 rounded-xl border border-red-500/30">
+            <div class="flex items-center justify-between mb-2">
+                <h3 class="text-red-400 text-sm">Toplam Zarar</h3>
+                <span class="text-2xl">📉</span>
+            </div>
+            <p id="demo-loss" class="text-2xl font-bold text-red-400">-{{ "%.2f"|format(total_loss) }} TL</p>
+        </div>
+        <div class="bg-[#1a1a1a] p-5 rounded-xl border border-blue-500/30">
+            <div class="flex items-center justify-between mb-2">
+                <h3 class="text-blue-400 text-sm">Başarı Oranı</h3>
+                <span class="text-2xl">🎯</span>
+            </div>
+            <p id="demo-winrate" class="text-2xl font-bold text-white">{{ "%.1f"|format(win_rate) }}%</p>
+            <p class="text-gray-400 text-xs mt-1">{{ winning_trades }}/{{ total_trades }} kazanan</p>
+        </div>
+    </div>
+
+    <!-- Active Demo Trades -->
+    <div class="bg-[#1a1a1a] rounded-xl border border-purple-500/30 p-6 mb-6">
+        <div class="flex items-center justify-between mb-4">
+            <h2 class="text-xl font-bold text-white">Açık Demo Pozisyonlar</h2>
+            <span class="px-3 py-1 bg-purple-600 rounded-full text-xs font-bold text-white">DEMO</span>
+        </div>
+        <div id="demo-positions" class="space-y-3">
+            <p class="text-gray-500 text-center py-4">Yükleniyor...</p>
+        </div>
+    </div>
+
+    <!-- Demo Trade History -->
+    <div class="bg-[#1a1a1a] rounded-xl border border-white/10 p-6">
+        <h2 class="text-xl font-bold text-white mb-4">Son Demo İşlemler</h2>
+        <div class="overflow-x-auto">
+            <table class="w-full text-sm">
+                <thead>
+                    <tr class="border-b border-white/10">
+                        <th class="text-left text-gray-400 py-3 px-4">Tarih</th>
+                        <th class="text-left text-gray-400 py-3 px-4">Sembol</th>
+                        <th class="text-left text-gray-400 py-3 px-4">Yön</th>
+                        <th class="text-right text-gray-400 py-3 px-4">Miktar</th>
+                        <th class="text-right text-gray-400 py-3 px-4">Giriş</th>
+                        <th class="text-right text-gray-400 py-3 px-4">Çıkış</th>
+                        <th class="text-right text-gray-400 py-3 px-4">K/Z</th>
+                    </tr>
+                </thead>
+                <tbody id="demo-trades-table">
+                    {% for trade in trades %}
+                    <tr class="border-b border-white/5 hover:bg-white/5">
+                        <td class="py-3 px-4 text-gray-300">{{ trade.created_at }}</td>
+                        <td class="py-3 px-4 text-white font-medium">{{ trade.symbol }}</td>
+                        <td class="py-3 px-4">
+                            <span class="px-2 py-1 rounded text-xs font-bold {{ 'bg-green-500/20 text-green-400' if trade.side == 'BUY' else 'bg-red-500/20 text-red-400' }}">
+                                {{ trade.side }}
+                            </span>
+                        </td>
+                        <td class="py-3 px-4 text-right text-gray-300">{{ "%.2f"|format(trade.amount) }} TL</td>
+                        <td class="py-3 px-4 text-right text-gray-300">${{ "%.2f"|format(trade.entry_price) }}</td>
+                        <td class="py-3 px-4 text-right text-gray-300">{{ "$%.2f"|format(trade.exit_price) if trade.exit_price else '-' }}</td>
+                        <td class="py-3 px-4 text-right font-bold {{ 'text-green-400' if trade.pnl > 0 else 'text-red-400' if trade.pnl < 0 else 'text-gray-400' }}">
+                            {{ "+%.2f"|format(trade.pnl) if trade.pnl > 0 else "%.2f"|format(trade.pnl) }} TL
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr><td colspan="7" class="text-center text-gray-500 py-8">Henüz demo işlem yok</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<script>
+async function loadDemoPositions() {
+    try {
+        const res = await fetch('/api/demo/positions/isolated');
+        const data = await res.json();
+        const container = document.getElementById('demo-positions');
+        if (data.ok && data.positions && data.positions.length > 0) {
+            container.innerHTML = data.positions.map(p => `
+                <div class="flex items-center justify-between p-4 bg-purple-900/20 rounded-lg border border-purple-500/30">
+                    <div class="flex items-center gap-4">
+                        <span class="text-2xl">${p.side === 'BUY' ? '🟢' : '🔴'}</span>
+                        <div>
+                            <p class="text-white font-bold">${p.symbol}</p>
+                            <p class="text-purple-400 text-sm">${p.amount} TL @ $${p.entry_price}</p>
+                        </div>
+                    </div>
+                    <div class="text-right">
+                        <p class="font-bold ${p.pnl >= 0 ? 'text-green-400' : 'text-red-400'}">${p.pnl >= 0 ? '+' : ''}${p.pnl.toFixed(2)} TL</p>
+                        <p class="text-gray-400 text-sm">${p.pnl_percent.toFixed(2)}%</p>
+                    </div>
+                </div>
+            `).join('');
+        } else {
+            container.innerHTML = '<p class="text-gray-500 text-center py-4">Açık demo pozisyon yok</p>';
+        }
+    } catch (e) {
+        console.error('Demo positions error:', e);
+    }
+}
+
+document.addEventListener('DOMContentLoaded', function() {
+    loadDemoPositions();
+    setInterval(loadDemoPositions, 5000);
+});
+</script>
+{% endblock %}
+"""
+
+
+# Demo Stats Template
+DEMO_STATS_TEMPLATE = """
+{% extends "base" %}
+{% block content %}
+<div class="min-h-screen p-6">
+    <div class="bg-purple-900/30 border border-purple-500/50 rounded-xl p-4 mb-6 flex items-center gap-4">
+        <div class="w-12 h-12 rounded-full bg-purple-600 flex items-center justify-center text-2xl">📊</div>
+        <div>
+            <h2 class="text-purple-300 font-bold text-lg">DEMO İSTATİSTİKLERİ</h2>
+            <p class="text-purple-400/80 text-sm">Günlük, haftalık ve aylık demo performansınız</p>
+        </div>
+    </div>
+
+    <!-- Period Stats -->
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
+        <!-- Daily -->
+        <div class="bg-[#1a1a1a] rounded-xl border border-purple-500/30 p-6">
+            <h3 class="text-lg font-bold text-white mb-4 flex items-center gap-2">
+                <span class="text-purple-400">📅</span> Günlük
+            </h3>
+            <div class="space-y-3">
+                <div class="flex justify-between"><span class="text-gray-400">İşlem Sayısı</span><span id="daily-trades" class="text-white font-bold">{{ daily_stats.trades }}</span></div>
+                <div class="flex justify-between"><span class="text-gray-400">Kar</span><span id="daily-profit" class="text-green-400 font-bold">+{{ "%.2f"|format(daily_stats.profit) }} TL</span></div>
+                <div class="flex justify-between"><span class="text-gray-400">Zarar</span><span id="daily-loss" class="text-red-400 font-bold">-{{ "%.2f"|format(daily_stats.loss) }} TL</span></div>
+                <div class="flex justify-between border-t border-white/10 pt-2"><span class="text-gray-400">Net</span><span class="{{ 'text-green-400' if daily_stats.net >= 0 else 'text-red-400' }} font-bold">{{ "%.2f"|format(daily_stats.net) }} TL</span></div>
+            </div>
+        </div>
+
+        <!-- Weekly -->
+        <div class="bg-[#1a1a1a] rounded-xl border border-blue-500/30 p-6">
+            <h3 class="text-lg font-bold text-white mb-4 flex items-center gap-2">
+                <span class="text-blue-400">📆</span> Haftalık
+            </h3>
+            <div class="space-y-3">
+                <div class="flex justify-between"><span class="text-gray-400">İşlem Sayısı</span><span id="weekly-trades" class="text-white font-bold">{{ weekly_stats.trades }}</span></div>
+                <div class="flex justify-between"><span class="text-gray-400">Kar</span><span id="weekly-profit" class="text-green-400 font-bold">+{{ "%.2f"|format(weekly_stats.profit) }} TL</span></div>
+                <div class="flex justify-between"><span class="text-gray-400">Zarar</span><span id="weekly-loss" class="text-red-400 font-bold">-{{ "%.2f"|format(weekly_stats.loss) }} TL</span></div>
+                <div class="flex justify-between border-t border-white/10 pt-2"><span class="text-gray-400">Net</span><span class="{{ 'text-green-400' if weekly_stats.net >= 0 else 'text-red-400' }} font-bold">{{ "%.2f"|format(weekly_stats.net) }} TL</span></div>
+            </div>
+        </div>
+
+        <!-- Monthly -->
+        <div class="bg-[#1a1a1a] rounded-xl border border-orange-500/30 p-6">
+            <h3 class="text-lg font-bold text-white mb-4 flex items-center gap-2">
+                <span class="text-orange-400">🗓️</span> Aylık
+            </h3>
+            <div class="space-y-3">
+                <div class="flex justify-between"><span class="text-gray-400">İşlem Sayısı</span><span id="monthly-trades" class="text-white font-bold">{{ monthly_stats.trades }}</span></div>
+                <div class="flex justify-between"><span class="text-gray-400">Kar</span><span id="monthly-profit" class="text-green-400 font-bold">+{{ "%.2f"|format(monthly_stats.profit) }} TL</span></div>
+                <div class="flex justify-between"><span class="text-gray-400">Zarar</span><span id="monthly-loss" class="text-red-400 font-bold">-{{ "%.2f"|format(monthly_stats.loss) }} TL</span></div>
+                <div class="flex justify-between border-t border-white/10 pt-2"><span class="text-gray-400">Net</span><span class="{{ 'text-green-400' if monthly_stats.net >= 0 else 'text-red-400' }} font-bold">{{ "%.2f"|format(monthly_stats.net) }} TL</span></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- All Time Stats -->
+    <div class="bg-[#1a1a1a] rounded-xl border border-white/10 p-6">
+        <h3 class="text-xl font-bold text-white mb-4">Tüm Zamanlar</h3>
+        <div class="grid grid-cols-2 md:grid-cols-5 gap-4">
+            <div class="text-center p-4 bg-white/5 rounded-lg">
+                <p class="text-3xl font-bold text-white">{{ total_stats.total_trades }}</p>
+                <p class="text-gray-400 text-sm">Toplam İşlem</p>
+            </div>
+            <div class="text-center p-4 bg-green-500/10 rounded-lg">
+                <p class="text-3xl font-bold text-green-400">{{ total_stats.winning_trades }}</p>
+                <p class="text-gray-400 text-sm">Kazanan</p>
+            </div>
+            <div class="text-center p-4 bg-red-500/10 rounded-lg">
+                <p class="text-3xl font-bold text-red-400">{{ total_stats.losing_trades }}</p>
+                <p class="text-gray-400 text-sm">Kaybeden</p>
+            </div>
+            <div class="text-center p-4 bg-blue-500/10 rounded-lg">
+                <p class="text-3xl font-bold text-blue-400">{{ "%.1f"|format(total_stats.win_rate) }}%</p>
+                <p class="text-gray-400 text-sm">Başarı Oranı</p>
+            </div>
+            <div class="text-center p-4 bg-purple-500/10 rounded-lg">
+                <p class="text-3xl font-bold {{ 'text-green-400' if total_stats.net_pnl >= 0 else 'text-red-400' }}">{{ "%.2f"|format(total_stats.net_pnl) }} TL</p>
+                <p class="text-gray-400 text-sm">Net K/Z</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Reset Demo Button -->
+    <div class="mt-6 text-center">
+        <button onclick="resetDemo()" class="px-6 py-3 bg-red-600 hover:bg-red-700 rounded-lg text-white font-bold transition">
+            🔄 Demo Hesabı Sıfırla (100,000 TL)
+        </button>
+    </div>
+</div>
+
+<script>
+async function resetDemo() {
+    if (!confirm('Demo hesabınız sıfırlanacak ve 100,000 TL başlangıç bakiyesine dönecek. Emin misiniz?')) return;
+    try {
+        const res = await fetch('/api/demo/reset/isolated', { method: 'POST' });
+        const data = await res.json();
+        if (data.ok) {
+            alert('Demo hesabı sıfırlandı!');
+            location.reload();
+        } else {
+            alert('Hata: ' + data.error);
+        }
+    } catch (e) {
+        alert('Bağlantı hatası');
+    }
+}
+</script>
+{% endblock %}
+"""
+
+
+# Demo API Endpoints - COMPLETELY ISOLATED
+@app.route('/api/app/demo/dashboard')
+def demo_dashboard_page():
+    """Demo Dashboard - ISOLATED from real"""
+    if not session.get("logged_in"):
+        return redirect("/api/app/login")
+    
+    user_id = session.get("user_id", 0)
+    demo_data = get_demo_balance_isolated(user_id)
+    
+    # Get recent demo trades
+    conn = db()
+    trades = conn.execute(
+        "SELECT * FROM demo_trades_isolated WHERE user_id=? ORDER BY created_at DESC LIMIT 20",
+        (user_id,)
+    ).fetchall()
+    conn.close()
+    
+    trade_list = []
+    for t in trades:
+        trade_list.append({
+            "id": t[0],
+            "symbol": t[2],
+            "side": t[3],
+            "amount": t[4],
+            "entry_price": t[5],
+            "exit_price": t[6],
+            "pnl": t[7] or 0,
+            "status": t[8],
+            "created_at": t[9]
+        })
+    
+    return render_template_string(DEMO_DASHBOARD_TEMPLATE,
+        sidebar=get_sidebar_html("demo-dashboard"),
+        balance=demo_data["balance"],
+        total_profit=demo_data["total_profit"],
+        total_loss=demo_data["total_loss"],
+        total_trades=demo_data["total_trades"],
+        winning_trades=demo_data["winning_trades"],
+        win_rate=demo_data["win_rate"],
+        trades=trade_list
+    )
+
+
+@app.route('/api/app/demo/trades')
+def demo_trades_page():
+    """Demo Trades Page - ISOLATED"""
+    return redirect('/api/app/demo/dashboard')
+
+
+@app.route('/api/app/demo/stats')
+def demo_stats_page():
+    """Demo Statistics Page - ISOLATED"""
+    if not session.get("logged_in"):
+        return redirect("/api/app/login")
+    
+    user_id = session.get("user_id", 0)
+    demo_data = get_demo_balance_isolated(user_id)
+    
+    from datetime import datetime, timedelta
+    today = datetime.now().strftime('%Y-%m-%d')
+    week_ago = (datetime.now() - timedelta(days=7)).strftime('%Y-%m-%d')
+    month_ago = (datetime.now() - timedelta(days=30)).strftime('%Y-%m-%d')
+    
+    conn = db()
+    
+    # Daily stats
+    daily = conn.execute(
+        "SELECT COUNT(*), SUM(CASE WHEN pnl > 0 THEN pnl ELSE 0 END), SUM(CASE WHEN pnl < 0 THEN ABS(pnl) ELSE 0 END) FROM demo_trades_isolated WHERE user_id=? AND date(created_at)=?",
+        (user_id, today)
+    ).fetchone()
+    
+    # Weekly stats
+    weekly = conn.execute(
+        "SELECT COUNT(*), SUM(CASE WHEN pnl > 0 THEN pnl ELSE 0 END), SUM(CASE WHEN pnl < 0 THEN ABS(pnl) ELSE 0 END) FROM demo_trades_isolated WHERE user_id=? AND date(created_at) >= ?",
+        (user_id, week_ago)
+    ).fetchone()
+    
+    # Monthly stats
+    monthly = conn.execute(
+        "SELECT COUNT(*), SUM(CASE WHEN pnl > 0 THEN pnl ELSE 0 END), SUM(CASE WHEN pnl < 0 THEN ABS(pnl) ELSE 0 END) FROM demo_trades_isolated WHERE user_id=? AND date(created_at) >= ?",
+        (user_id, month_ago)
+    ).fetchone()
+    
+    conn.close()
+    
+    def make_stats(row):
+        trades = row[0] or 0
+        profit = row[1] or 0
+        loss = row[2] or 0
+        return {"trades": trades, "profit": profit, "loss": loss, "net": profit - loss}
+    
+    total_trades = demo_data["total_trades"]
+    winning = demo_data["winning_trades"]
+    
+    return render_template_string(DEMO_STATS_TEMPLATE,
+        sidebar=get_sidebar_html("demo-stats"),
+        daily_stats=make_stats(daily),
+        weekly_stats=make_stats(weekly),
+        monthly_stats=make_stats(monthly),
+        total_stats={
+            "total_trades": total_trades,
+            "winning_trades": winning,
+            "losing_trades": total_trades - winning,
+            "win_rate": demo_data["win_rate"],
+            "net_pnl": demo_data["total_profit"] - demo_data["total_loss"]
+        }
+    )
+
+
+@app.route('/api/demo/positions/isolated')
+def api_demo_positions_isolated():
+    """Get demo positions - ISOLATED endpoint"""
+    if not session.get("logged_in"):
+        return jsonify(ok=False, error="AUTH"), 401
+    
+    user_id = session.get("user_id", 0)
+    conn = db()
+    rows = conn.execute(
+        "SELECT id, symbol, side, amount, entry_price, pnl, status FROM demo_trades_isolated WHERE user_id=? AND status='open'",
+        (user_id,)
+    ).fetchall()
+    conn.close()
+    
+    positions = []
+    for r in rows:
+        pnl = r[5] or 0
+        amount = r[3] or 1
+        pnl_percent = (pnl / amount * 100) if amount > 0 else 0
+        positions.append({
+            "id": r[0],
+            "symbol": r[1],
+            "side": r[2],
+            "amount": r[3],
+            "entry_price": r[4],
+            "pnl": pnl,
+            "pnl_percent": pnl_percent
+        })
+    
+    return jsonify(ok=True, positions=positions)
+
+
+@app.route('/api/demo/reset/isolated', methods=['POST'])
+def api_demo_reset_isolated():
+    """Reset demo account - ISOLATED"""
+    if not session.get("logged_in"):
+        return jsonify(ok=False, error="AUTH"), 401
+    
+    user_id = session.get("user_id", 0)
+    conn = db()
+    # Delete all demo trades
+    conn.execute("DELETE FROM demo_trades_isolated WHERE user_id=?", (user_id,))
+    # Reset demo balance
+    conn.execute("DELETE FROM demo_balance_isolated WHERE user_id=?", (user_id,))
+    conn.execute(
+        "INSERT INTO demo_balance_isolated (user_id, balance) VALUES (?, ?)",
+        (user_id, DEMO_INITIAL_BALANCE)
+    )
+    # Delete daily stats
+    conn.execute("DELETE FROM demo_daily_stats WHERE user_id=?", (user_id,))
+    conn.commit()
+    conn.close()
+    
+    return jsonify(ok=True, message="Demo account reset", balance=DEMO_INITIAL_BALANCE)
+
+
+# Demo Auto Trader Daemon - ISOLATED, runs fake trades
+import random
+import threading
+import time
+
+_demo_simulator_running = False
+
+def demo_auto_trader_daemon():
+    """
+    DEMO AUTO TRADER - Completely isolated from real trading
+    Makes 15 fake trades per day for practice
+    """
+    global _demo_simulator_running
+    if _demo_simulator_running:
+        return
+    _demo_simulator_running = True
+    
+    COINS = ['BTC/USDT', 'ETH/USDT', 'SOL/USDT', 'XRP/USDT', 'DOGE/USDT', 'ADA/USDT']
+    FAKE_PRICES = {
+        'BTC/USDT': 70000, 'ETH/USDT': 3500, 'SOL/USDT': 150,
+        'XRP/USDT': 0.55, 'DOGE/USDT': 0.08, 'ADA/USDT': 0.45
+    }
+    
+    def run_demo_trades():
+        while True:
+            try:
+                # Sleep between 30-90 minutes (to make ~15 trades per day)
+                sleep_time = random.randint(1800, 5400)  # 30-90 minutes
+                time.sleep(sleep_time)
+                
+                # Get all users with demo accounts
+                conn = db()
+                users = conn.execute("SELECT DISTINCT user_id FROM demo_balance_isolated").fetchall()
+                conn.close()
+                
+                for (user_id,) in users:
+                    try:
+                        demo_data = get_demo_balance_isolated(user_id)
+                        balance = demo_data["balance"]
+                        
+                        if balance < 100:  # Not enough balance
+                            continue
+                        
+                        # Random trade
+                        coin = random.choice(COINS)
+                        base_price = FAKE_PRICES.get(coin, 100)
+                        # Add some randomness to price
+                        price = base_price * (1 + random.uniform(-0.02, 0.02))
+                        
+                        # Random amount (1-10% of balance)
+                        amount = balance * random.uniform(0.01, 0.10)
+                        amount = round(amount, 2)
+                        
+                        # Random outcome (-5% to +5%)
+                        pnl_percent = random.uniform(-0.05, 0.05)
+                        pnl = amount * pnl_percent
+                        pnl = round(pnl, 2)
+                        
+                        exit_price = price * (1 + pnl_percent)
+                        
+                        # Insert trade
+                        conn = db()
+                        conn.execute("""
+                            INSERT INTO demo_trades_isolated 
+                            (user_id, symbol, side, amount, entry_price, exit_price, pnl, status, closed_at)
+                            VALUES (?, ?, ?, ?, ?, ?, ?, 'closed', CURRENT_TIMESTAMP)
+                        """, (user_id, coin, 'BUY' if random.random() > 0.5 else 'SELL', amount, price, exit_price, pnl))
+                        
+                        # Update balance
+                        new_balance = balance + pnl
+                        total_profit = demo_data["total_profit"] + (pnl if pnl > 0 else 0)
+                        total_loss = demo_data["total_loss"] + (abs(pnl) if pnl < 0 else 0)
+                        total_trades = demo_data["total_trades"] + 1
+                        winning_trades = demo_data["winning_trades"] + (1 if pnl > 0 else 0)
+                        
+                        conn.execute("""
+                            UPDATE demo_balance_isolated 
+                            SET balance=?, total_profit=?, total_loss=?, total_trades=?, winning_trades=?, updated_at=CURRENT_TIMESTAMP
+                            WHERE user_id=?
+                        """, (new_balance, total_profit, total_loss, total_trades, winning_trades, user_id))
+                        
+                        conn.commit()
+                        conn.close()
+                        
+                        print(f"[DEMO TRADE] User {user_id}: {coin} {'BUY' if pnl > 0 else 'SELL'} {amount} TL -> PnL: {pnl:+.2f} TL")
+                        
+                    except Exception as e:
+                        print(f"[DEMO TRADE ERROR] User {user_id}: {e}")
+                
+            except Exception as e:
+                print(f"[DEMO DAEMON ERROR] {e}")
+                time.sleep(60)
+    
+    t = threading.Thread(target=run_demo_trades, name="demo_auto_trader", daemon=True)
+    t.start()
+    print("[DEMO TRADER] Started - Making ~15 fake trades per day per user")
+
+# Start demo trader daemon
+try:
+    demo_auto_trader_daemon()
+except Exception as e:
+    print(f"[DEMO TRADER] Failed to start: {e}")
+
+# ==================== END DEMO MODE ====================
+
+
 # WSGI/ASGI wrapper for compatibility
 # For Emergent/Uvicorn: ASGI wrapper needed
 # For user's server (Gunicorn): Comment out these 3 lines
