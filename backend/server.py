@@ -31201,7 +31201,8 @@ def api_real_balance():
         last_err = None
         for attempt in range(3):
             try:
-                bal = client.fetch_balance()
+                # Trading hesabından bakiye çek (spot işlemler için)
+                bal = client.fetch_balance({'type': 'trading'})
                 last_err = None
                 break
             except Exception as _e:
