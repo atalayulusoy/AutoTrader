@@ -18978,7 +18978,12 @@ def admin_user_update(username: str):
               bybit_api_key=?,
               bybit_api_secret=?,
               gate_api_key=?,
-              gate_api_secret=?
+              gate_api_secret=?,
+              subscription_type=?,
+              subscription_start=?,
+              subscription_end=?,
+              subscription_active=?,
+              subscription_notified=0
             WHERE username=?
         """, (
             display_name, exchange_id, webhook_secret, telegram_chat_id,
@@ -18988,6 +18993,7 @@ def admin_user_update(username: str):
             binance_api_key, binance_api_secret,
             bybit_api_key, bybit_api_secret,
             gate_api_key, gate_api_secret,
+            subscription_type, subscription_start, subscription_end, subscription_active,
             username
         ))
 
