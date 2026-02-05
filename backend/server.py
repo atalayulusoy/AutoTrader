@@ -35442,23 +35442,7 @@ except Exception:
 # === END AU_DEMO_SELL_THREAD_V1 ===\n
 
 
-# --- NUCLEAR ROUTE INJECTIONS ---
-
-@app.route('/api/app/payment')
-def page_payment():
-    return render_template_string(PAYMENT_TEMPLATE)
-
-@app.route('/api/app/portfolio')
-def page_portfolio():
-    return render_template_string(PORTFOLIO_ANALYTICS_TEMPLATE, total_balance=0, total_pnl=0, success_rate=0)
-
-@app.route('/education')
-@app.route('/api/app/education')
-def page_education():
-    return render_template_string(EDUCATION_TEMPLATE)
-
-@app.route('/api/exchange/list')
-def api_exchange_page():
-    # This renders the new list with Binance, Bybit etc
-    return render_template_string(EXCHANGE_API_TEMPLATE)
+# --- NUCLEAR ROUTE INJECTIONS (REMOVED - Duplicate routes) ---
+# These were duplicate and causing AssertionError
+# Original routes are defined earlier in the file (line 20349-20400)
 
