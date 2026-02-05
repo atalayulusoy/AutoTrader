@@ -25986,9 +25986,27 @@ FULL_DASHBOARD_TEMPLATE = """
     <script>
     function toggleSidebar() {
         const sb = document.getElementById('sidebar');
+        const overlay = document.getElementById('sidebar-overlay');
         if (!sb) return;
-        sb.classList.toggle('open');
+        
+        const isOpen = sb.classList.contains('open');
+        
+        if (isOpen) {
+            sb.classList.remove('open');
+            if (overlay) overlay.classList.add('hidden');
+        } else {
+            sb.classList.add('open');
+            if (overlay) overlay.classList.remove('hidden');
+        }
     }
+    
+    // Close sidebar when clicking overlay
+    document.addEventListener('DOMContentLoaded', function() {
+        const overlay = document.getElementById('sidebar-overlay');
+        if (overlay) {
+            overlay.addEventListener('click', toggleSidebar);
+        }
+    });
     
     // Notification function
 function showNotification(message, type = 'info') {
