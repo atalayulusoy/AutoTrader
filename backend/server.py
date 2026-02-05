@@ -20730,7 +20730,10 @@ def list_exchange_config():
 
 @app.route('/education')
 @app.route('/education-hub')
+@app.route('/education')
+@app.route('/education-hub')
 @app.route('/api/app/education')
+@app.route('/api/app/admin/education')
 def page_education():
     return render_template_string(EDUCATION_TEMPLATE)
 
