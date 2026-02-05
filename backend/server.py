@@ -8942,33 +8942,71 @@ def list_trades(username: str, limit: int = 200) -> List[Dict[str, Any]]:
 @app.route("/api/positions/<mode>", methods=["GET"])
 def api_positions_mode(mode):
     """
-    UI uyumluluk endpointi.
-    mode: demo | live
-    Login yoksa 401 vermek yerine ok:true ve boş liste döner.
+    UI uyumluluk endpointi - Aktif pozisyonları döndürür
+    mode: demo | live | real
     """
     mode = (mode or "").lower().strip()
-    if mode not in ("demo", "live"):
-        return jsonify({"ok": False, "error": "BAD_MODE", "detail": "mode demo veya live olmalı"}), 400
-
-    # Login yoksa bile demo ekranı kırılmasın
+    if mode not in ("demo", "live", "real"):
+        return jsonify({"ok": False, "error": "BAD_MODE", "detail": "mode demo, live veya real olmalı"}), 400
+    
+    if not session.get("logged_in"):
+        return jsonify({"ok": True, "mode": mode, "positions": []})
+    
+    user_id = session.get("user_id", 0)
+    username = session.get("username", "")
+    
     try:
-        # mevcut yardımcı fonksiyonlar varsa kullan
-        mode = "real" # Forced Real
-        if False: # Demo Disabled
-            # demo positions: varsa test_positions / demo_positions getterları
-            if "get_demo_positions" in globals():
-                positions = get_demo_positions()  # type: ignore
-                return jsonify({"ok": True, "mode": "demo", "positions": positions})
-            if "demo_positions" in globals():
-                return jsonify({"ok": True, "mode": "demo", "positions": demo_positions})  # type: ignore
+        conn = db()
+        
+        if mode == "demo":
+            # Demo pozisyonlar - demo_trades_isolated tablosundan
+            rows = conn.execute(
+                "SELECT id, symbol, side, amount, entry_price, pnl, status, created_at FROM demo_trades_isolated WHERE user_id=? AND status='open' ORDER BY created_at DESC",
+                (user_id,)
+            ).fetchall()
+            conn.close()
+            
+            positions = []
+            for r in rows:
+                positions.append({
+                    "id": r[0],
+                    "symbol": r[1],
+                    "side": r[2],
+                    "amount": r[3],
+                    "entry_price": r[4],
+                    "pnl": r[5] or 0,
+                    "status": r[6],
+                    "created_at": r[7]
+                })
+            return jsonify({"ok": True, "mode": "demo", "positions": positions})
         else:
-            if "get_live_positions" in globals():
-                positions = get_live_positions()  # type: ignore
-                return jsonify({"ok": True, "mode": "live", "positions": positions})
+            # Real/Live pozisyonlar - real_trades tablosundan
+            rows = conn.execute(
+                """SELECT id, symbol, side, amount, entry_price, current_price, pnl, status, created_at 
+                   FROM real_trades 
+                   WHERE (user_id=? OR username=?) AND status='open' 
+                   ORDER BY created_at DESC""",
+                (user_id, username)
+            ).fetchall()
+            conn.close()
+            
+            positions = []
+            for r in rows:
+                positions.append({
+                    "id": r[0],
+                    "symbol": r[1],
+                    "side": r[2],
+                    "amount": r[3],
+                    "entry_price": r[4],
+                    "current_price": r[5],
+                    "pnl": r[6] or 0,
+                    "status": r[7],
+                    "created_at": r[8]
+                })
+            return jsonify({"ok": True, "mode": mode, "positions": positions})
     except Exception as e:
-        return jsonify({"ok": False, "error": "POSITIONS_FAILED", "detail": str(e)}), 500
-
-    return jsonify({"ok": True, "mode": mode, "positions": []})
+        print(f"[POSITIONS] Error: {e}")
+        return jsonify({"ok": True, "mode": mode, "positions": []})
 
 
 @app.get("/api/bot/settings")
