@@ -13656,6 +13656,12 @@ def init_db() -> None:
         ("gate_api_secret", "TEXT NOT NULL DEFAULT ''"),
         ("demo_balance", "REAL NOT NULL DEFAULT 10000.0"),
         ("real_balance", "REAL NOT NULL DEFAULT 0.0"),
+        # Subscription system columns
+        ("subscription_type", "TEXT NOT NULL DEFAULT 'trial'"),  # trial, monthly, yearly, lifetime
+        ("subscription_start", "INTEGER NOT NULL DEFAULT 0"),
+        ("subscription_end", "INTEGER NOT NULL DEFAULT 0"),
+        ("subscription_active", "INTEGER NOT NULL DEFAULT 1"),
+        ("subscription_notified", "INTEGER NOT NULL DEFAULT 0"),  # Bildirim gönderildi mi
     ]:
         try:
             cur.execute(f"ALTER TABLE users ADD COLUMN {col} {typedef}")
