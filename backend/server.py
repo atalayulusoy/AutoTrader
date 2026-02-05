@@ -563,7 +563,153 @@ function downloadPDF() {
 EDUCATION_TEMPLATE = """
 {% extends "base" %}
 {% block content %}
-<div class="p-6 max-w-[1400px] mx-auto">
+<div class="flex gap-6">
+    <!-- Sidebar -->
+    <div class="w-64 flex-shrink-0">
+        {{ sidebar|safe }}
+    </div>
+    
+    <!-- Main Content -->
+    <div class="flex-1 p-6">
+        <!-- Header -->
+        <div class="mb-6">
+            <h1 class="text-3xl font-bold text-white mb-2">Eğitim Merkezi</h1>
+            <p class="text-gray-400">Profesyonel trading eğitimleri ve canlı webinarlar</p>
+        </div>
+
+        <!-- Genel İlerleme -->
+        <div class="bg-gradient-to-r from-orange-600/20 to-orange-500/10 border border-orange-500/30 rounded-xl p-6 mb-6">
+            <div class="flex items-center justify-between mb-3">
+                <div>
+                    <h2 class="text-xl font-bold text-white mb-1">Genel İlerleme</h2>
+                    <p class="text-gray-300 text-sm">Trading yolculuğunuzdaki toplam ilerlemeniz</p>
+                </div>
+                <div class="text-right">
+                    <p id="overall-progress" class="text-4xl font-bold text-orange-400">0%</p>
+                    <p class="text-gray-400 text-sm">Tamamlandı</p>
+                </div>
+            </div>
+            <div class="w-full bg-gray-700 rounded-full h-3">
+                <div id="progress-bar" class="bg-gradient-to-r from-orange-500 to-orange-400 h-3 rounded-full transition-all duration-500" style="width: 0%"></div>
+            </div>
+        </div>
+
+        <!-- Kurs Detayları -->
+        <div class="bg-[#1a1a1a] rounded-xl border border-white/10 p-6 mb-8">
+            <h2 class="text-2xl font-bold text-white mb-6">Kurs Detayları</h2>
+            <div id="course-list" class="space-y-6">
+                <!-- JavaScript ile doldurulacak -->
+            </div>
+        </div>
+
+        <!-- Canlı Webinarlar -->
+        <div>
+            <h2 class="text-2xl font-bold text-white mb-4">Canlı Webinarlar</h2>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <!-- Bitcoin Halving 2024 -->
+                <div class="bg-[#1a1a1a] rounded-xl border border-white/10 p-6 hover:border-orange-500/50 transition">
+                    <div class="flex items-start gap-4">
+                        <div class="w-16 h-16 bg-orange-600/20 rounded-lg flex items-center justify-center text-3xl">🎥</div>
+                        <div class="flex-1">
+                            <h3 class="text-lg font-bold text-white mb-2">Bitcoin Halving 2024: Ne Beklemeli?</h3>
+                            <p class="text-gray-400 text-sm mb-3">Uzman analistlerle Bitcoin halving sürecini analiz edin</p>
+                            <div class="flex items-center gap-4 text-sm">
+                                <span class="text-orange-400 font-semibold">📅 15 Şubat 2026</span>
+                                <span class="text-gray-400">⏰ 20:00</span>
+                                <span class="px-3 py-1 bg-red-600/20 text-red-400 rounded-full text-xs font-semibold">CANLI</span>
+                            </div>
+                        </div>
+                    </div>
+                    <button class="w-full mt-4 px-4 py-3 bg-orange-600 hover:bg-orange-700 rounded-lg text-white font-semibold transition">Kaydol ve Katıl</button>
+                </div>
+
+                <!-- Alt Coin Sezonu -->
+                <div class="bg-[#1a1a1a] rounded-xl border border-white/10 p-6 hover:border-blue-500/50 transition">
+                    <div class="flex items-start gap-4">
+                        <div class="w-16 h-16 bg-blue-600/20 rounded-lg flex items-center justify-center text-3xl">🎥</div>
+                        <div class="flex-1">
+                            <h3 class="text-lg font-bold text-white mb-2">Alt Coin Sezonuna Hazırlık</h3>
+                            <p class="text-gray-400 text-sm mb-3">Hangi altcoinler potansiyel taşıyor?</p>
+                            <div class="flex items-center gap-4 text-sm">
+                                <span class="text-blue-400 font-semibold">📅 20 Şubat 2026</span>
+                                <span class="text-gray-400">⏰ 19:00</span>
+                                <span class="px-3 py-1 bg-blue-600/20 text-blue-400 rounded-full text-xs font-semibold">YAKLAŞAN</span>
+                            </div>
+                        </div>
+                    </div>
+                    <button class="w-full mt-4 px-4 py-3 bg-blue-600 hover:bg-blue-700 rounded-lg text-white font-semibold transition">Hatırlat</button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+// Kullanıcı ilerlemesini çek
+async function loadProgress() {
+    try {
+        const response = await fetch('/api/education/progress');
+        const data = await response.json();
+        
+        if (data.success) {
+            // Genel ilerleme
+            const overallProgress = Math.round(data.overall_progress);
+            document.getElementById('overall-progress').textContent = overallProgress + '%';
+            document.getElementById('progress-bar').style.width = overallProgress + '%';
+            
+            // Kurs detayları
+            const courseList = document.getElementById('course-list');
+            const courses = [
+                { id: 'trading_basics', icon: '📖', title: 'Trading Temelleri', videos: '12 video • 4 saat' },
+                { id: 'technical_analysis', icon: '📈', title: 'Teknik Analiz', videos: '8 video • 3 saat' },
+                { id: 'risk_management', icon: '🛡️', title: 'Risk Yönetimi', videos: '6 video • 2 saat' },
+                { id: 'bot_usage', icon: '🤖', title: 'Otomatik Bot Kullanımı', videos: '10 video • 5 saat' }
+            ];
+            
+            courseList.innerHTML = '';
+            courses.forEach(course => {
+                const courseData = data.courses[course.id] || { progress: 0 };
+                const progress = Math.round(courseData.progress);
+                const color = progress >= 50 ? 'green' : progress > 0 ? 'orange' : 'gray';
+                
+                courseList.innerHTML += `
+                    <div>
+                        <div class="flex items-center justify-between mb-2">
+                            <div class="flex items-center gap-3">
+                                <span class="text-2xl">${course.icon}</span>
+                                <div>
+                                    <h3 class="text-lg font-semibold text-white">${course.title}</h3>
+                                    <p class="text-gray-400 text-sm">${course.videos}</p>
+                                </div>
+                            </div>
+                            <span class="text-${color}-400 font-bold text-lg">${progress}%</span>
+                        </div>
+                        <div class="w-full bg-gray-700 rounded-full h-2.5">
+                            <div class="bg-${color}-500 h-2.5 rounded-full transition-all duration-500" style="width: ${progress}%"></div>
+                        </div>
+                    </div>
+                `;
+            });
+        }
+    } catch (e) {
+        console.error('Progress loading error:', e);
+    }
+}
+
+// Sayfa yüklendiğinde çalıştır
+loadProgress();
+
+// Video izleme tracking (örnek)
+function trackVideoProgress(courseId, videoId, progressPct) {
+    fetch('/api/education/progress', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ course_id: courseId, video_id: videoId, progress_pct: progressPct })
+    });
+}
+</script>
+{% endblock %}
+"""
     <!-- Header -->
     <div class="mb-6">
         <h1 class="text-3xl font-bold text-white mb-2">Eğitim Merkezi</h1>
