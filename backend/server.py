@@ -37132,6 +37132,43 @@ DEMO_DASHBOARD_TEMPLATE = """
         </div>
     </div>
 
+    <!-- Demo Trade Panel -->
+    <div class="bg-gradient-to-r from-purple-900/30 to-blue-900/30 rounded-xl border border-purple-500/30 p-6 mb-6">
+        <h2 class="text-xl font-bold text-white mb-4 flex items-center gap-2">
+            <span class="text-2xl">🎮</span> Demo İşlem Aç
+        </h2>
+        <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <div>
+                <label class="text-purple-400 text-sm block mb-2">Coin Seç</label>
+                <select id="demoTradeSymbol" class="w-full bg-black/50 border border-purple-500/30 rounded-lg px-4 py-3 text-white">
+                    <option value="BTC/USDT">BTC/USDT</option>
+                    <option value="ETH/USDT">ETH/USDT</option>
+                    <option value="SOL/USDT">SOL/USDT</option>
+                    <option value="XRP/USDT">XRP/USDT</option>
+                    <option value="DOGE/USDT">DOGE/USDT</option>
+                    <option value="ADA/USDT">ADA/USDT</option>
+                </select>
+            </div>
+            <div>
+                <label class="text-purple-400 text-sm block mb-2">Miktar (TL)</label>
+                <input type="number" id="demoTradeAmount" value="1000" min="100" max="50000" class="w-full bg-black/50 border border-purple-500/30 rounded-lg px-4 py-3 text-white" placeholder="1000">
+            </div>
+            <div>
+                <label class="text-purple-400 text-sm block mb-2">Yön</label>
+                <select id="demoTradeSide" class="w-full bg-black/50 border border-purple-500/30 rounded-lg px-4 py-3 text-white">
+                    <option value="BUY">🟢 LONG (AL)</option>
+                    <option value="SELL">🔴 SHORT (SAT)</option>
+                </select>
+            </div>
+            <div class="flex items-end">
+                <button onclick="openDemoTrade()" class="w-full bg-purple-600 hover:bg-purple-500 text-white font-bold py-3 rounded-lg transition flex items-center justify-center gap-2">
+                    <span>⚡</span> Demo İşlem Aç
+                </button>
+            </div>
+        </div>
+        <p class="text-purple-400/60 text-xs mt-3">💡 Demo işlemler otomatik olarak rastgele sonuçlanır. Gerçek para ile işlem yapmaz.</p>
+    </div>
+
     <!-- Active Demo Trades -->
     <div class="bg-[#1a1a1a] rounded-xl border border-purple-500/30 p-6 mb-6">
         <div class="flex items-center justify-between mb-4">
