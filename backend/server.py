@@ -37568,6 +37568,74 @@ def api_demo_reset_isolated():
     return jsonify(ok=True, message="Demo account reset", balance=DEMO_INITIAL_BALANCE)
 
 
+@app.route('/api/demo/trade/open', methods=['POST'])
+def api_demo_trade_open():
+    """Open a manual demo trade - ISOLATED from real trading"""
+    if not session.get("logged_in"):
+        return jsonify(ok=False, error="AUTH"), 401
+    
+    user_id = session.get("user_id", 0)
+    data = request.get_json() or {}
+    
+    symbol = data.get('symbol', 'BTC/USDT')
+    amount = float(data.get('amount', 0))
+    side = data.get('side', 'BUY')
+    
+    if amount < 100:
+        return jsonify(ok=False, error="Minimum 100 TL gerekli"), 400
+    
+    # Get demo balance
+    demo_data = get_demo_balance_isolated(user_id)
+    if demo_data['balance'] < amount:
+        return jsonify(ok=False, error="Yetersiz demo bakiye"), 400
+    
+    # Fake price based on symbol
+    FAKE_PRICES = {
+        'BTC/USDT': 70000, 'ETH/USDT': 3500, 'SOL/USDT': 150,
+        'XRP/USDT': 0.55, 'DOGE/USDT': 0.08, 'ADA/USDT': 0.45
+    }
+    entry_price = FAKE_PRICES.get(symbol, 100) * (1 + random.uniform(-0.01, 0.01))
+    
+    # Random outcome (-5% to +5%)
+    pnl_percent = random.uniform(-0.05, 0.05)
+    pnl = amount * pnl_percent
+    exit_price = entry_price * (1 + pnl_percent)
+    
+    conn = db()
+    # Insert trade as closed (instant execution)
+    conn.execute("""
+        INSERT INTO demo_trades_isolated 
+        (user_id, symbol, side, amount, entry_price, exit_price, pnl, status, closed_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, 'closed', CURRENT_TIMESTAMP)
+    """, (user_id, symbol, side, amount, entry_price, exit_price, round(pnl, 2)))
+    
+    # Update balance
+    new_balance = demo_data['balance'] + pnl
+    total_profit = demo_data['total_profit'] + (pnl if pnl > 0 else 0)
+    total_loss = demo_data['total_loss'] + (abs(pnl) if pnl < 0 else 0)
+    total_trades = demo_data['total_trades'] + 1
+    winning_trades = demo_data['winning_trades'] + (1 if pnl > 0 else 0)
+    
+    conn.execute("""
+        UPDATE demo_balance_isolated 
+        SET balance=?, total_profit=?, total_loss=?, total_trades=?, winning_trades=?, updated_at=CURRENT_TIMESTAMP
+        WHERE user_id=?
+    """, (new_balance, total_profit, total_loss, total_trades, winning_trades, user_id))
+    
+    conn.commit()
+    conn.close()
+    
+    return jsonify(ok=True, trade={
+        'symbol': symbol,
+        'side': side,
+        'amount': amount,
+        'entry_price': entry_price,
+        'exit_price': exit_price,
+        'pnl': round(pnl, 2),
+        'new_balance': round(new_balance, 2)
+    })
+
+
 # Demo Auto Trader Daemon - ISOLATED, runs fake trades
 import random
 import threading
