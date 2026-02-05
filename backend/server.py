@@ -36341,6 +36341,131 @@ RİSK: DÜŞÜK/ORTA/YÜKSEK"""
             return {'decision': 'SELL', 'reasoning': 'Auto: %0.5+ kar', 'profit_pct': profit_pct, 'confidence': 70}
         return {'decision': 'HOLD', 'reasoning': 'Auto: Düşük kar', 'profit_pct': profit_pct, 'confidence': 60}
 
+# ==================== EDUCATION PROGRESS API ====================
+
+@app.route('/api/education/progress', methods=['POST'])
+def save_education_progress():
+    """Video izleme ilerlemesini kaydet"""
+    try:
+        if 'username' not in session:
+            return jsonify({'error': 'Login required'}), 401
+        
+        data = request.get_json()
+        username = session['username']
+        course_id = data.get('course_id')
+        video_id = data.get('video_id')
+        progress_pct = float(data.get('progress_pct', 0))
+        completed = 1 if progress_pct >= 90 else 0
+        
+        conn = db()
+        conn.execute("""
+            INSERT OR REPLACE INTO user_education_progress 
+            (username, course_id, video_id, progress_pct, completed, last_watched_at)
+            VALUES (?, ?, ?, ?, ?, ?)
+        """, (username, course_id, video_id, progress_pct, completed, int(time.time())))
+        conn.commit()
+        
+        return jsonify({'success': True, 'progress': progress_pct})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/education/progress', methods=['GET'])
+def get_education_progress():
+    """Kullanıcının eğitim ilerlemesini getir"""
+    try:
+        if 'username' not in session:
+            return jsonify({'error': 'Login required'}), 401
+        
+        username = session['username']
+        conn = db()
+        
+        # Tüm kursların ilerleme yüzdesini hesapla
+        courses = {
+            'trading_basics': {'total_videos': 12, 'title': 'Trading Temelleri'},
+            'technical_analysis': {'total_videos': 8, 'title': 'Teknik Analiz'},
+            'risk_management': {'total_videos': 6, 'title': 'Risk Yönetimi'},
+            'bot_usage': {'total_videos': 10, 'title': 'Otomatik Bot'}
+        }
+        
+        progress_data = {}
+        for course_id, info in courses.items():
+            completed = conn.execute("""
+                SELECT COUNT(*) FROM user_education_progress 
+                WHERE username = ? AND course_id = ? AND completed = 1
+            """, (username, course_id)).fetchone()[0]
+            
+            progress_pct = (completed / info['total_videos']) * 100 if info['total_videos'] > 0 else 0
+            progress_data[course_id] = {
+                'title': info['title'],
+                'progress': progress_pct,
+                'completed_videos': completed,
+                'total_videos': info['total_videos']
+            }
+        
+        # Genel ilerleme
+        total_videos = sum(c['total_videos'] for c in courses.values())
+        total_completed = sum(p['completed_videos'] for p in progress_data.values())
+        overall_progress = (total_completed / total_videos) * 100 if total_videos > 0 else 0
+        
+        return jsonify({
+            'success': True,
+            'overall_progress': overall_progress,
+            'courses': progress_data
+        })
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+# ==================== PORTFOLIO DATA API (REAL DATA) ====================
+
+@app.route('/api/app/portfolio-data', methods=['GET'])
+def get_portfolio_data():
+    """Portfolio Analytics için gerçek veri döndür"""
+    try:
+        if 'username' not in session:
+            return jsonify({'error': 'Login required'}), 401
+        
+        username = session['username']
+        conn = db()
+        
+        # Tüm closed pozisyonları çek
+        trades = conn.execute("""
+            SELECT * FROM auto_positions 
+            WHERE username = ? AND status = 'closed'
+            ORDER BY exit_at DESC
+        """, (username,)).fetchall()
+        
+        # İstatistikler hesapla
+        total_trades = len(trades)
+        if total_trades == 0:
+            return jsonify({
+                'success': True,
+                'total_balance': 0,
+                'total_pnl': 0,
+                'success_rate': 0,
+                'total_trades': 0,
+                'trades': []
+            })
+        
+        # PnL hesapla
+        total_pnl = sum([t['pnl'] for t in trades if t['pnl']])
+        profitable_trades = sum([1 for t in trades if t['pnl'] and t['pnl'] > 0])
+        success_rate = (profitable_trades / total_trades) * 100
+        
+        # User balance
+        user = conn.execute("SELECT * FROM users WHERE username = ?", (username,)).fetchone()
+        total_balance = user['demo_balance'] if user else 0
+        
+        return jsonify({
+            'success': True,
+            'total_balance': total_balance,
+            'total_pnl': total_pnl,
+            'success_rate': success_rate,
+            'total_trades': total_trades,
+            'trades': [dict(t) for t in trades[:50]]  # Son 50 trade
+        })
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
 # TradingView Webhook Endpoint
 @app.route('/api/tradingview/webhook', methods=['POST'])
 def tradingview_webhook():
