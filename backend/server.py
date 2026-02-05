@@ -5134,8 +5134,18 @@ LIVE_TRADING_CHAT_TEMPLATE = """
 
         <!-- 3-Column Layout -->
         <div class="flex-1 grid grid-cols-1 lg:grid-cols-12 gap-4 min-h-0">
-             <!-- Left Panel: Rooms -->
-             <div class="hidden lg:block lg:col-span-3 bg-[#1a1a1a] rounded-xl border border-white/10 flex flex-col min-h-0">
+             <!-- Mobile Room Selector -->
+             <div class="lg:hidden mb-2">
+                 <select id="mobileRoomSelect" onchange="switchRoomMobile(this.value)" class="w-full bg-[#1a1a1a] border border-white/10 rounded-xl px-4 py-3 text-white font-medium">
+                     <option value="genel">💬 Genel Sohbet</option>
+                     <option value="sinyaller">📊 Sinyaller</option>
+                     <option value="analiz">📈 Teknik Analiz</option>
+                     <option value="vip">⭐ VIP Oda</option>
+                 </select>
+             </div>
+             
+             <!-- Left Panel: Rooms (Desktop) -->
+             <div class="hidden lg:flex lg:col-span-3 bg-[#1a1a1a] rounded-xl border border-white/10 flex-col min-h-0">
                  <div class="p-4 border-b border-white/10">
                      <h2 class="font-bold text-white flex items-center gap-2">
                          <svg class="w-5 h-5 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"/></svg>
