@@ -35807,7 +35807,136 @@ from datetime import datetime
 GEMINI_API_KEY = "AIzaSyAlwjI7vwFWZPRDROLjb_5tPZGL6airtQ4"
 client = genai.Client(api_key=GEMINI_API_KEY)
 
-def get_multi_exchange_price(symbol):
+def get_market_analysis(symbol, exchange_name='okx'):
+    """Detaylı piyasa analizi - Mumlar, Teknik İndikatörler, Order Book"""
+    import ccxt
+    try:
+        # Exchange seç
+        exchange = getattr(ccxt, exchange_name.lower())()
+        
+        # Symbol format düzelt
+        if '/' not in symbol:
+            symbol = f"{symbol}/USDT"
+        
+        # 1. MUM VERİSİ (Son 100 mum - 5 dakikalık)
+        ohlcv = exchange.fetch_ohlcv(symbol, timeframe='5m', limit=100)
+        
+        # OHLCV parse et
+        closes = [candle[4] for candle in ohlcv[-50:]]  # Son 50 closing price
+        highs = [candle[2] for candle in ohlcv[-50:]]
+        lows = [candle[3] for candle in ohlcv[-50:]]
+        volumes = [candle[5] for candle in ohlcv[-50:]]
+        
+        current_price = closes[-1]
+        prev_price = closes[-2]
+        price_change_pct = ((current_price - prev_price) / prev_price) * 100
+        
+        # 2. RSI HESAPLA (14 period)
+        def calculate_rsi(prices, period=14):
+            deltas = [prices[i] - prices[i-1] for i in range(1, len(prices))]
+            gains = [d if d > 0 else 0 for d in deltas]
+            losses = [-d if d < 0 else 0 for d in deltas]
+            
+            avg_gain = sum(gains[-period:]) / period
+            avg_loss = sum(losses[-period:]) / period
+            
+            if avg_loss == 0:
+                return 100
+            rs = avg_gain / avg_loss
+            rsi = 100 - (100 / (1 + rs))
+            return rsi
+        
+        rsi = calculate_rsi(closes)
+        
+        # 3. EMA HESAPLA (12 ve 26 period)
+        def calculate_ema(prices, period):
+            multiplier = 2 / (period + 1)
+            ema = [prices[0]]
+            for price in prices[1:]:
+                ema.append((price * multiplier) + (ema[-1] * (1 - multiplier)))
+            return ema[-1]
+        
+        ema_12 = calculate_ema(closes, 12)
+        ema_26 = calculate_ema(closes, 26)
+        macd = ema_12 - ema_26
+        
+        # 4. BOLLINGER BANDS
+        sma_20 = sum(closes[-20:]) / 20
+        std_dev = (sum([(x - sma_20) ** 2 for x in closes[-20:]]) / 20) ** 0.5
+        bb_upper = sma_20 + (2 * std_dev)
+        bb_lower = sma_20 - (2 * std_dev)
+        
+        # 5. ORDER BOOK ANALİZİ
+        order_book = exchange.fetch_order_book(symbol, limit=20)
+        
+        # Bid (alış) ve Ask (satış) pressure
+        total_bid_volume = sum([bid[1] for bid in order_book['bids'][:10]])
+        total_ask_volume = sum([ask[1] for ask in order_book['asks'][:10]])
+        
+        buy_pressure = (total_bid_volume / (total_bid_volume + total_ask_volume)) * 100
+        sell_pressure = 100 - buy_pressure
+        
+        # 6. SON İŞLEMLER (Momentum)
+        recent_trades = exchange.fetch_trades(symbol, limit=100)
+        buy_trades = [t for t in recent_trades if t['side'] == 'buy']
+        sell_trades = [t for t in recent_trades if t['side'] == 'sell']
+        
+        buy_volume = sum([t['amount'] for t in buy_trades])
+        sell_volume = sum([t['amount'] for t in sell_trades])
+        
+        # 7. TREND BELİRLEME
+        trend = "YÜKSELİŞ" if ema_12 > ema_26 else "DÜŞÜŞ"
+        momentum = "GÜÇLÜ" if abs(macd) > 10 else "ZAYIF"
+        
+        # 8. SUPPORT/RESISTANCE
+        support = min(lows[-20:])
+        resistance = max(highs[-20:])
+        
+        # 9. VOLUME ANALİZİ
+        avg_volume = sum(volumes[-20:]) / 20
+        current_volume = volumes[-1]
+        volume_spike = (current_volume / avg_volume) if avg_volume > 0 else 1
+        
+        return {
+            'symbol': symbol,
+            'current_price': current_price,
+            'price_change_pct': price_change_pct,
+            
+            # Teknik İndikatörler
+            'rsi': rsi,
+            'rsi_signal': 'AŞIRI SATIM' if rsi < 30 else 'AŞIRI ALIM' if rsi > 70 else 'NORMAL',
+            'macd': macd,
+            'macd_signal': 'YUKARI' if macd > 0 else 'AŞAĞI',
+            'trend': trend,
+            'momentum': momentum,
+            
+            # Bollinger Bands
+            'bb_upper': bb_upper,
+            'bb_lower': bb_lower,
+            'bb_position': 'ÜST BANT' if current_price > bb_upper else 'ALT BANT' if current_price < bb_lower else 'ORTA',
+            
+            # Order Book
+            'buy_pressure': buy_pressure,
+            'sell_pressure': sell_pressure,
+            'order_book_signal': 'ALIŞ BASKI' if buy_pressure > 60 else 'SATIŞ BASKI' if sell_pressure > 60 else 'DENGELİ',
+            
+            # Volume
+            'volume_spike': volume_spike,
+            'volume_signal': 'YÜKSEK VOLUME' if volume_spike > 1.5 else 'NORMAL VOLUME',
+            
+            # Support/Resistance
+            'support': support,
+            'resistance': resistance,
+            'distance_to_resistance': ((resistance - current_price) / current_price) * 100,
+            
+            # Recent Trades
+            'buy_sell_ratio': (buy_volume / sell_volume) if sell_volume > 0 else 1,
+            'market_sentiment': 'ALICI' if buy_volume > sell_volume else 'SATICI'
+        }
+    
+    except Exception as e:
+        print(f"[MARKET ANALYSIS ERROR] {e}")
+        return None
     """Birden fazla borsadan fiyat çek ve en iyi fiyatı döndür"""
     import ccxt
     prices = {}
