@@ -6701,9 +6701,7 @@ NOT_FOUND_TEMPLATE = """
 import jinja2
 from asgiref.wsgi import WsgiToAsgi
 
-app = Flask(__name__)
-# Wrap Flask WSGI app for ASGI compatibility (uvicorn)
-app_asgi = WsgiToAsgi(app)
+flask_app = Flask(__name__)
 
 
 ### __AU_ENDPOINTS_V1
