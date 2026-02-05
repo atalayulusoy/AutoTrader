@@ -8982,11 +8982,11 @@ def api_positions_mode(mode):
         else:
             # Real/Live pozisyonlar - real_trades tablosundan
             rows = conn.execute(
-                """SELECT id, symbol, side, amount, entry_price, current_price, pnl, status, created_at 
+                """SELECT id, coin, side, amount_usdt, entry_price, exit_price, pnl, status, created_at 
                    FROM real_trades 
-                   WHERE (user_id=? OR username=?) AND status='open' 
+                   WHERE user_id=? AND status='open' 
                    ORDER BY created_at DESC""",
-                (user_id, username)
+                (user_id,)
             ).fetchall()
             conn.close()
             
@@ -8994,11 +8994,11 @@ def api_positions_mode(mode):
             for r in rows:
                 positions.append({
                     "id": r[0],
-                    "symbol": r[1],
+                    "symbol": r[1],  # coin -> symbol for UI
                     "side": r[2],
-                    "amount": r[3],
+                    "amount": r[3],  # amount_usdt -> amount for UI
                     "entry_price": r[4],
-                    "current_price": r[5],
+                    "current_price": r[5] or r[4],  # exit_price or entry_price
                     "pnl": r[6] or 0,
                     "status": r[7],
                     "created_at": r[8]
