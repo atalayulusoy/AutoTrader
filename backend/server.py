@@ -62,19 +62,99 @@ from flask import Flask, Response, render_template_string, request, session, red
 EXCHANGE_API_TEMPLATE = """
 {% extends "base" %}
 {% block head %}
+<style>
+    .api-key-display { font-family: monospace; letter-spacing: 1px; }
+    .eye-btn { cursor: pointer; transition: all 0.2s; }
+    .eye-btn:hover { color: #3b82f6; }
+    .status-badge { padding: 4px 12px; border-radius: 20px; font-size: 12px; font-weight: 600; }
+    .status-connected { background: rgba(34, 197, 94, 0.2); color: #22c55e; }
+    .status-disconnected { background: rgba(239, 68, 68, 0.2); color: #ef4444; }
+</style>
 <script>
+    let apiKeyVisibility = {};
+    
+    function toggleKeyVisibility(exchange, keyType) {
+        const el = document.getElementById(`${exchange}-${keyType}-display`);
+        const eyeIcon = document.getElementById(`${exchange}-${keyType}-eye`);
+        const key = apiKeyVisibility[`${exchange}-${keyType}`];
+        
+        if (!el || !key) return;
+        
+        if (el.dataset.visible === 'true') {
+            el.textContent = maskKey(key);
+            el.dataset.visible = 'false';
+            eyeIcon.innerHTML = '👁️';
+        } else {
+            el.textContent = key;
+            el.dataset.visible = 'true';
+            eyeIcon.innerHTML = '🔒';
+        }
+    }
+    
+    function maskKey(key) {
+        if (!key || key.length < 8) return '••••••••';
+        return key.substring(0, 4) + '••••••••' + key.substring(key.length - 4);
+    }
+    
+    async function loadExchangeConfigs() {
+        try {
+            const res = await fetch('/api/exchange/configs', { credentials: 'include' });
+            const data = await res.json();
+            if (data.ok && data.configs) {
+                for (const cfg of data.configs) {
+                    const ex = cfg.exchange.toUpperCase();
+                    const card = document.getElementById(`card-${ex}`);
+                    if (card) {
+                        // Store keys for visibility toggle
+                        apiKeyVisibility[`${ex}-key`] = cfg.api_key || '';
+                        apiKeyVisibility[`${ex}-secret`] = cfg.api_secret || '';
+                        if (cfg.passphrase) apiKeyVisibility[`${ex}-passphrase`] = cfg.passphrase;
+                        
+                        // Update card with API info
+                        const infoDiv = document.getElementById(`${ex}-info`);
+                        if (infoDiv && cfg.api_key) {
+                            infoDiv.innerHTML = `
+                                <div class="mt-4 p-3 bg-black/30 rounded-lg border border-white/5">
+                                    <div class="flex items-center justify-between mb-2">
+                                        <span class="text-xs text-gray-500">API Key</span>
+                                        <span id="${ex}-key-eye" class="eye-btn text-gray-400" onclick="toggleKeyVisibility('${ex}', 'key')">👁️</span>
+                                    </div>
+                                    <div id="${ex}-key-display" class="api-key-display text-sm text-green-400" data-visible="false">${maskKey(cfg.api_key)}</div>
+                                </div>
+                                <div class="mt-2 flex items-center gap-2">
+                                    <span class="status-badge status-connected">Bağlı</span>
+                                    ${cfg.balance ? `<span class="text-sm text-gray-400">Bakiye: <span class="text-green-400 font-bold">$${parseFloat(cfg.balance).toFixed(2)}</span></span>` : ''}
+                                </div>
+                            `;
+                            // Update button
+                            const btn = card.querySelector('button');
+                            if (btn) {
+                                btn.textContent = 'Düzenle / Güncelle';
+                                btn.classList.remove('bg-blue-600', 'bg-gray-700', 'bg-green-700', 'bg-red-700');
+                                btn.classList.add('bg-green-600', 'hover:bg-green-700');
+                            }
+                        }
+                    }
+                }
+            }
+        } catch (e) { console.error('Config load error:', e); }
+    }
+    
     function openApiModal(n){
         document.getElementById('apiModal').classList.remove('hidden');
         document.getElementById('modalTitle').innerText = n + ' API Ayarlari';
         document.getElementById('exchangeInput').value = n;
-        // Reset
-        document.getElementById('apiKey').value = '';
+        // Pre-fill if exists
+        const existingKey = apiKeyVisibility[`${n}-key`] || '';
+        document.getElementById('apiKey').value = existingKey;
         document.getElementById('apiSecret').value = '';
         document.getElementById('passphrase').value = '';
     }
+    
     function closeApiModal(){
         document.getElementById('apiModal').classList.add('hidden');
     }
+    
     async function saveApiConfig() {
         const k = document.getElementById('apiKey').value;
         const s = document.getElementById('apiSecret').value;
@@ -98,48 +178,56 @@ EXCHANGE_API_TEMPLATE = """
             }
         } catch(e) { alert('Baglanti Hatasi!'); }
     }
+    
+    // Load configs on page load
+    document.addEventListener('DOMContentLoaded', loadExchangeConfigs);
 </script>
 {% endblock %}
 {% block content %}
 <div class="p-6 text-white">
-    <h1 class="text-3xl font-bold mb-6">Borsa API Yonetimi</h1>
+    <h1 class="text-3xl font-bold mb-2">Borsa API Yonetimi</h1>
     <p class="mb-8 text-gray-400">Otomatik alim-satim islemleri icin borsa API anahtarlarinizi asagidan ekleyebilirsiniz.</p>
     
     <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         
         <!-- OKX -->
-        <div class="bg-[#1a1a1a] p-6 rounded-xl border border-white/10 hover:border-blue-500 transition shadow-lg">
+        <div id="card-OKX" class="bg-[#1a1a1a] p-6 rounded-xl border border-white/10 hover:border-blue-500 transition shadow-lg">
             <h2 class="text-xl font-bold text-white mb-2 flex items-center gap-2">OKX <span class="bg-blue-900 text-blue-200 text-xs px-2 py-0.5 rounded">Onerilen</span></h2>
             <p class="text-gray-400 text-sm mb-4">Vadeli ve Spot islem destegi.</p>
-            <button onclick="openApiModal('OKX')" class="w-full px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded text-white font-medium">Ayarlari Duzenle</button>
+            <div id="OKX-info"></div>
+            <button onclick="openApiModal('OKX')" class="w-full mt-4 px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded text-white font-medium">API Ekle</button>
         </div>
 
         <!-- BINANCE -->
-        <div class="bg-[#1a1a1a] p-6 rounded-xl border border-white/10 hover:border-yellow-500 transition shadow-lg">
+        <div id="card-BINANCE" class="bg-[#1a1a1a] p-6 rounded-xl border border-white/10 hover:border-yellow-500 transition shadow-lg">
             <h2 class="text-xl font-bold text-white mb-2">BINANCE</h2>
             <p class="text-gray-400 text-sm mb-4">Global Binance API baglantisi.</p>
-            <button onclick="openApiModal('BINANCE')" class="w-full px-4 py-2 bg-[#FCD535] hover:bg-yellow-500 text-black font-medium">Ayarlari Duzenle</button>
+            <div id="BINANCE-info"></div>
+            <button onclick="openApiModal('BINANCE')" class="w-full mt-4 px-4 py-2 bg-[#FCD535] hover:bg-yellow-500 text-black font-medium">API Ekle</button>
         </div>
 
         <!-- BYBIT -->
-        <div class="bg-[#1a1a1a] p-6 rounded-xl border border-white/10 hover:border-orange-500 transition shadow-lg">
+        <div id="card-BYBIT" class="bg-[#1a1a1a] p-6 rounded-xl border border-white/10 hover:border-orange-500 transition shadow-lg">
             <h2 class="text-xl font-bold text-white mb-2">BYBIT</h2>
             <p class="text-gray-400 text-sm mb-4">Hizli ve guvenilir vadeli islem.</p>
-            <button onclick="openApiModal('BYBIT')" class="w-full px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded text-white font-medium">Ayarlari Duzenle</button>
+            <div id="BYBIT-info"></div>
+            <button onclick="openApiModal('BYBIT')" class="w-full mt-4 px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded text-white font-medium">API Ekle</button>
         </div>
 
         <!-- GATE.IO -->
-        <div class="bg-[#1a1a1a] p-6 rounded-xl border border-white/10 hover:border-green-500 transition shadow-lg">
+        <div id="card-GATEIO" class="bg-[#1a1a1a] p-6 rounded-xl border border-white/10 hover:border-green-500 transition shadow-lg">
             <h2 class="text-xl font-bold text-white mb-2">GATE.IO</h2>
             <p class="text-gray-400 text-sm mb-4">Genis altcoin yelpazesi.</p>
-            <button onclick="openApiModal('GATEIO')" class="w-full px-4 py-2 bg-green-700 hover:bg-green-600 rounded text-white font-medium">Ayarlari Duzenle</button>
+            <div id="GATEIO-info"></div>
+            <button onclick="openApiModal('GATEIO')" class="w-full mt-4 px-4 py-2 bg-green-700 hover:bg-green-600 rounded text-white font-medium">API Ekle</button>
         </div>
 
         <!-- BTCTURK -->
-        <div class="bg-[#1a1a1a] p-6 rounded-xl border border-white/10 hover:border-red-500 transition shadow-lg">
+        <div id="card-BTCTURK" class="bg-[#1a1a1a] p-6 rounded-xl border border-white/10 hover:border-red-500 transition shadow-lg">
             <h2 class="text-xl font-bold text-white mb-2">BTCTURK</h2>
             <p class="text-gray-400 text-sm mb-4">Yerli borsa entegrasyonu.</p>
-            <button onclick="openApiModal('BTCTURK')" class="w-full px-4 py-2 bg-red-700 hover:bg-red-600 rounded text-white font-medium">Ayarlari Duzenle</button>
+            <div id="BTCTURK-info"></div>
+            <button onclick="openApiModal('BTCTURK')" class="w-full mt-4 px-4 py-2 bg-red-700 hover:bg-red-600 rounded text-white font-medium">API Ekle</button>
         </div>
 
     </div>
