@@ -21044,7 +21044,38 @@ def page_portfolio():
 @app.route('/payment-management')
 def page_payment():
     if not session.get("logged_in"): return redirect("/api/app/login")
-    return render_template_string(PAYMENT_MANAGEMENT_TEMPLATE, sidebar=get_sidebar_html("payment"))
+    # Get user data for template
+    user_id = session.get("user_id", 0)
+    total_trades = 0
+    success_rate = 0.0
+    total_pnl = 0.0
+    avg_volume = 0.0
+    
+    try:
+        conn = db()
+        # Get trade stats
+        trades = conn.execute(
+            "SELECT COUNT(*), SUM(CASE WHEN pnl > 0 THEN 1 ELSE 0 END), SUM(pnl), AVG(amount) FROM trades WHERE user_id=? OR username=?",
+            (user_id, session.get("username", ""))
+        ).fetchone()
+        conn.close()
+        
+        if trades and trades[0]:
+            total_trades = int(trades[0] or 0)
+            wins = int(trades[1] or 0)
+            success_rate = (wins / total_trades * 100) if total_trades > 0 else 0.0
+            total_pnl = float(trades[2] or 0)
+            avg_volume = float(trades[3] or 0)
+    except Exception as e:
+        print(f"[PAYMENT] Stats error: {e}")
+    
+    return render_template_string(PAYMENT_MANAGEMENT_TEMPLATE, 
+        sidebar=get_sidebar_html("payment"),
+        total_trades=total_trades,
+        success_rate=success_rate,
+        total_pnl=total_pnl,
+        avg_volume=avg_volume
+    )
 
 @app.route('/exchange-api')
 def page_exchange_api():
