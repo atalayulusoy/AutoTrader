@@ -1,0 +1,34 @@
+# secrets
+.env
+*.env
+*.key
+*.pem
+
+# databases
+*.db
+*.sqlite
+*.sqlite3
+*-shm
+*-wal
+
+# node
+node_modules/
+dist/
+build/
+
+# python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# logs & tmp
+*.log
+nohup.out
+gunicorn.out
+backups/
+_backup_servers/
+server.py.BAK*
+server.py.BACKUP*
+data.db.BAK*
+data.db.BACKUP*
