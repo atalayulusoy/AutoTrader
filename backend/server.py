@@ -328,32 +328,32 @@ PORTFOLIO_ANALYTICS_TEMPLATE = """
                 <h3 class="text-gray-400 text-sm">Toplam Portföy Değeri</h3>
                 <span class="text-2xl">💰</span>
             </div>
-            <p class="text-2xl font-bold text-white">155.000,00 ₺</p>
-            <p class="text-green-400 text-sm mt-1">+24,2% (Son 30 gün)</p>
+            <p id="portfolioValue" class="text-2xl font-bold text-white">0,00 $</p>
+            <p id="portfolioChange" class="text-gray-400 text-sm mt-1">Henüz işlem yok</p>
         </div>
         <div class="bg-[#1a1a1a] p-5 rounded-xl border border-white/10">
             <div class="flex items-center justify-between mb-2">
                 <h3 class="text-gray-400 text-sm">Gerçekleşmemiş Kar/Zarar</h3>
                 <span class="text-2xl">📈</span>
             </div>
-            <p class="text-2xl font-bold text-green-400">+18.250,75 ₺</p>
-            <p class="text-gray-400 text-sm mt-1">+13,4%</p>
+            <p id="unrealizedPnl" class="text-2xl font-bold text-gray-400">0,00 $</p>
+            <p id="unrealizedPnlPercent" class="text-gray-400 text-sm mt-1">0%</p>
         </div>
         <div class="bg-[#1a1a1a] p-5 rounded-xl border border-white/10">
             <div class="flex items-center justify-between mb-2">
                 <h3 class="text-gray-400 text-sm">Başarı Oranı</h3>
                 <span class="text-2xl">🎯</span>
             </div>
-            <p class="text-2xl font-bold text-white">64,8%</p>
+            <p id="winRate" class="text-2xl font-bold text-white">0%</p>
             <p class="text-gray-400 text-sm mt-1">Kârlı işlem yüzdesi</p>
         </div>
         <div class="bg-[#1a1a1a] p-5 rounded-xl border border-white/10">
             <div class="flex items-center justify-between mb-2">
-                <h3 class="text-gray-400 text-sm">Sharpe Oranı</h3>
+                <h3 class="text-gray-400 text-sm">Toplam İşlem</h3>
                 <span class="text-2xl">📊</span>
             </div>
-            <p class="text-2xl font-bold text-white">1,85</p>
-            <p class="text-gray-400 text-sm mt-1">Kâr performansı</p>
+            <p id="totalTrades" class="text-2xl font-bold text-white">0</p>
+            <p class="text-gray-400 text-sm mt-1">Tamamlanan işlem</p>
         </div>
     </div>
 
@@ -370,8 +370,9 @@ PORTFOLIO_ANALYTICS_TEMPLATE = """
                     <button class="px-3 py-1 bg-gray-700 hover:bg-gray-600 rounded-lg text-white text-xs">1Y</button>
                 </div>
             </div>
-            <div class="h-64">
+            <div class="h-64 flex items-center justify-center">
                 <canvas id="performanceChart"></canvas>
+                <p id="noDataChart" class="text-gray-500 hidden">Henüz işlem verisi yok</p>
             </div>
         </div>
 
@@ -380,14 +381,10 @@ PORTFOLIO_ANALYTICS_TEMPLATE = """
             <h2 class="text-xl font-bold text-white mb-4">Varlık Dağılımı</h2>
             <div class="h-64 flex items-center justify-center">
                 <canvas id="assetPieChart"></canvas>
+                <p id="noAssetData" class="text-gray-500">Henüz varlık yok</p>
             </div>
-            <div class="mt-4 space-y-2 text-sm">
-                <div class="flex justify-between"><span class="text-gray-400">🟦 BTC/TRY</span><span class="text-white font-medium">29.03%</span></div>
-                <div class="flex justify-between"><span class="text-gray-400">🟩 XRP/TRY</span><span class="text-white font-medium">23.58%</span></div>
-                <div class="flex justify-between"><span class="text-gray-400">🟨 SOL/TRY</span><span class="text-white font-medium">22.19%</span></div>
-                <div class="flex justify-between"><span class="text-gray-400">🟧 ADA/TRY</span><span class="text-white font-medium">9.60%</span></div>
-                <div class="flex justify-between"><span class="text-gray-400">🟥 AVAX/TRY</span><span class="text-white font-medium">5.49%</span></div>
-                <div class="flex justify-between"><span class="text-gray-400">⬜ Diğer</span><span class="text-white font-medium">3.23%</span></div>
+            <div id="assetLegend" class="mt-4 space-y-2 text-sm">
+                <!-- Will be populated by JavaScript -->
             </div>
         </div>
     </div>
@@ -408,7 +405,7 @@ PORTFOLIO_ANALYTICS_TEMPLATE = """
                     </tr>
                 </thead>
                 <tbody id="performanceTable">
-                    <!-- Data will be populated by JavaScript -->
+                    <tr><td colspan="6" class="text-center text-gray-500 py-8">Henüz işlem verisi yok</td></tr>
                 </tbody>
             </table>
         </div>
@@ -421,28 +418,28 @@ PORTFOLIO_ANALYTICS_TEMPLATE = """
                 <span class="text-2xl">⚡</span>
                 <h3 class="text-gray-400 text-sm">Toplam İşlem</h3>
             </div>
-            <p class="text-2xl font-bold text-white">0</p>
+            <p id="totalTradesMetric" class="text-2xl font-bold text-white">0</p>
         </div>
         <div class="bg-[#1a1a1a] p-5 rounded-xl border border-white/10">
             <div class="flex items-center gap-2 mb-2">
                 <span class="text-2xl">🎲</span>
                 <h3 class="text-gray-400 text-sm">Kazanç Oranı</h3>
             </div>
-            <p class="text-2xl font-bold text-green-400">0.0%</p>
+            <p id="winRateMetric" class="text-2xl font-bold text-gray-400">0.0%</p>
         </div>
         <div class="bg-[#1a1a1a] p-5 rounded-xl border border-white/10">
             <div class="flex items-center gap-2 mb-2">
                 <span class="text-2xl">📊</span>
-                <h3 class="text-gray-400 text-sm">Sharpe Oranı</h3>
+                <h3 class="text-gray-400 text-sm">Ortalama Kar</h3>
             </div>
-            <p class="text-2xl font-bold text-white">1.50</p>
+            <p id="avgProfit" class="text-2xl font-bold text-white">0.00 $</p>
         </div>
         <div class="bg-[#1a1a1a] p-5 rounded-xl border border-white/10">
             <div class="flex items-center gap-2 mb-2">
                 <span class="text-2xl">📉</span>
                 <h3 class="text-gray-400 text-sm">Max Drawdown</h3>
             </div>
-            <p class="text-2xl font-bold text-red-400">15.0%</p>
+            <p id="maxDrawdown" class="text-2xl font-bold text-gray-400">0.0%</p>
         </div>
     </div>
 
