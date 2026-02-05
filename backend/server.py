@@ -13791,6 +13791,20 @@ def init_db() -> None:
             cur.execute(_auto_col_sql)
         except Exception:
             pass
+    
+    # User education progress table (video tracking)
+    cur.execute("""
+    CREATE TABLE IF NOT EXISTS user_education_progress (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        username TEXT NOT NULL,
+        course_id TEXT NOT NULL,
+        video_id TEXT NOT NULL,
+        progress_pct REAL NOT NULL DEFAULT 0.0,
+        completed INTEGER NOT NULL DEFAULT 0,
+        last_watched_at INTEGER NOT NULL DEFAULT 0,
+        UNIQUE(username, course_id, video_id)
+    )
+    """)
 
     
     ensure_paper_test_schema(conn)
