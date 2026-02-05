@@ -36169,12 +36169,12 @@ def ai_auto_sell_daemon():
             except Exception as e:
                 print(f"[AI DAEMON ERROR] {e}")
             
-            # 90 dakika bekle (günde ~16 kere)
-            time.sleep(90 * 60)
+            # Her 10 saniyede bir kontrol et (çok agresif, real-time trading)
+            time.sleep(10)
     
     t = threading.Thread(target=run, name="ai_auto_sell_daemon", daemon=True)
     t.start()
-    print("[AI DAEMON] Started - checking every 90 minutes")
+    print("[AI DAEMON] Started - checking every 10 seconds (real-time mode)")
 
 # Daemon'u başlat
 try:
