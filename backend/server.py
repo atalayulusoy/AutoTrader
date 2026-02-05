@@ -35795,6 +35795,393 @@ except Exception:
 # These were duplicate and causing AssertionError
 # Original routes are defined earlier in the file (line 20349-20400)
 
+
+# ==================== TRADINGVIEW WEBHOOK + AI AUTO TRADING ====================
+# Google Gemini AI için konfigürasyon
+import google.generativeai as genai
+import json
+import time
+from datetime import datetime
+
+GEMINI_API_KEY = "AIzaSyAlwjI7vwFWZPRDROLjb_5tPZGL6airtQ4"
+genai.configure(api_key=GEMINI_API_KEY)
+gemini_model = genai.GenerativeModel('gemini-1.5-flash')
+
+def get_multi_exchange_price(symbol):
+    """Birden fazla borsadan fiyat çek ve en iyi fiyatı döndür"""
+    import ccxt
+    prices = {}
+    
+    exchanges_to_check = {
+        'binance': ccxt.binance(),
+        'okx': ccxt.okx(),
+        'bybit': ccxt.bybit(),
+        'gateio': ccxt.gateio()
+    }
+    
+    # Symbol format düzelt (BTC/USDT formatına çevir)
+    if '/' not in symbol:
+        symbol = f"{symbol}/USDT"
+    
+    for ex_name, exchange in exchanges_to_check.items():
+        try:
+            ticker = exchange.fetch_ticker(symbol)
+            prices[ex_name] = {
+                'bid': ticker['bid'],  # Al fiyatı (satıcıların fiyatı)
+                'ask': ticker['ask'],  # Sat fiyatı (alıcıların fiyatı)
+                'last': ticker['last']
+            }
+        except Exception as e:
+            print(f"[PRICE] {ex_name} error for {symbol}: {e}")
+            continue
+    
+    if not prices:
+        return None
+    
+    # En düşük ASK (almak için en iyi) ve en yüksek BID (satmak için en iyi)
+    best_buy_exchange = min(prices.items(), key=lambda x: x[1]['ask'])
+    best_sell_exchange = max(prices.items(), key=lambda x: x[1]['bid'])
+    
+    return {
+        'symbol': symbol,
+        'best_buy': {
+            'exchange': best_buy_exchange[0],
+            'price': best_buy_exchange[1]['ask']
+        },
+        'best_sell': {
+            'exchange': best_sell_exchange[0],
+            'price': best_sell_exchange[1]['bid']
+        },
+        'all_prices': prices
+    }
+
+def ai_should_sell(coin, entry_price, current_price, market_data=None):
+    """Google Gemini AI ile sell kararı al"""
+    try:
+        profit_pct = ((current_price - entry_price) / entry_price) * 100
+        
+        prompt = f"""Sen bir kripto trading uzmanısın. Aşağıdaki bilgilere göre SELL yapmalı mıyım yoksa HOLD mu etmeliyim?
+
+Coin: {coin}
+Giriş Fiyatı: ${entry_price}
+Şu Anki Fiyat: ${current_price}
+Kar Yüzdesi: %{profit_pct:.2f}
+
+Kurallar:
+1. %0.40 - %0.60 arası kar varsa ve fiyat düşme trendindeyse SELL
+2. Eğer fiyat yükseliş trendindeyse %1+ kar hedefle, HOLD
+3. %0.40'ın altındaysa kesinlikle HOLD
+4. %2+ kar varsa kesinlikle SELL (risk yönetimi)
+
+Cevabını şu formatta ver:
+KARAR: SELL veya HOLD
+SEBEP: Kısa açıklama (1 cümle)
+TAHMİN: YUKSELIŞ veya DÜŞÜŞ"""
+
+        response = gemini_model.generate_content(prompt)
+        ai_response = response.text
+        
+        # Response parse et
+        decision = "HOLD"
+        if "KARAR: SELL" in ai_response or "SELL" in ai_response.split('\n')[0]:
+            decision = "SELL"
+        
+        return {
+            'decision': decision,
+            'reasoning': ai_response,
+            'profit_pct': profit_pct
+        }
+    except Exception as e:
+        print(f"[AI ERROR] {e}")
+        # Fallback: basit rule-based karar
+        profit_pct = ((current_price - entry_price) / entry_price) * 100
+        if profit_pct >= 2.0:
+            return {'decision': 'SELL', 'reasoning': 'Auto: %2+ kar', 'profit_pct': profit_pct}
+        elif profit_pct >= 0.50:
+            return {'decision': 'SELL', 'reasoning': 'Auto: %0.5+ kar', 'profit_pct': profit_pct}
+        return {'decision': 'HOLD', 'reasoning': 'Auto: Düşük kar', 'profit_pct': profit_pct}
+
+# TradingView Webhook Endpoint
+@_flask_wsgi_app.route('/api/tradingview/webhook', methods=['POST'])
+def tradingview_webhook():
+    """TradingView'den sinyal al"""
+    try:
+        data = request.get_json()
+        
+        # Webhook secret check
+        webhook_secret = request.headers.get('X-Webhook-Secret') or data.get('secret')
+        if not webhook_secret:
+            return jsonify({'error': 'Webhook secret required'}), 401
+        
+        # User'ı bul
+        conn = db()
+        user = conn.execute(
+            "SELECT * FROM users WHERE webhook_secret = ?", 
+            (webhook_secret,)
+        ).fetchone()
+        
+        if not user:
+            return jsonify({'error': 'Invalid webhook secret'}), 401
+        
+        username = user['username']
+        action = data.get('action', '').upper()  # BUY or SELL
+        symbol = data.get('symbol', 'BTC/USDT')
+        
+        if action not in ['BUY', 'SELL']:
+            return jsonify({'error': 'Invalid action. Use BUY or SELL'}), 400
+        
+        if action == 'BUY':
+            # Bekleyen auto pozisyonları kontrol et
+            pending = conn.execute("""
+                SELECT * FROM auto_positions 
+                WHERE username = ? AND status = 'waiting' AND coin = ?
+                ORDER BY created_at DESC LIMIT 1
+            """, (username, symbol)).fetchone()
+            
+            if not pending:
+                return jsonify({'error': f'No pending auto position for {symbol}'}), 404
+            
+            # En iyi fiyatı bul
+            price_data = get_multi_exchange_price(symbol)
+            if not price_data:
+                return jsonify({'error': 'Could not fetch price'}), 500
+            
+            entry_price = price_data['best_buy']['price']
+            exchange = price_data['best_buy']['exchange']
+            
+            # Pozisyonu aktif yap
+            conn.execute("""
+                UPDATE auto_positions 
+                SET status = 'open', entry_price = ?, current_price = ?, 
+                    entry_at = ?, exchange_id = ?
+                WHERE id = ?
+            """, (entry_price, entry_price, datetime.now().isoformat(), exchange.upper(), pending['id']))
+            conn.commit()
+            
+            return jsonify({
+                'success': True,
+                'message': f'BUY executed for {symbol}',
+                'position_id': pending['id'],
+                'entry_price': entry_price,
+                'exchange': exchange
+            })
+        
+        elif action == 'SELL':
+            # Manuel SELL signal (optional)
+            return jsonify({'success': True, 'message': 'SELL signal received (auto AI handles sells)'})
+            
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+# Auto Position Management
+@_flask_wsgi_app.route('/api/auto/position/create', methods=['POST'])
+def create_auto_position():
+    """Yeni auto pozisyon oluştur (BTC/20USDT gibi)"""
+    try:
+        if 'username' not in session:
+            return jsonify({'error': 'Login required'}), 401
+        
+        data = request.get_json()
+        coin = data.get('coin', 'BTC/USDT')
+        amount_usdt = float(data.get('amount_usdt', 20))
+        mode = data.get('mode', 'demo')
+        
+        username = session['username']
+        conn = db()
+        
+        conn.execute("""
+            INSERT INTO auto_positions 
+            (username, coin, amount_usdt, status, mode, created_at)
+            VALUES (?, ?, ?, 'waiting', ?, ?)
+        """, (username, coin, amount_usdt, mode, datetime.now().isoformat()))
+        conn.commit()
+        
+        return jsonify({'success': True, 'message': f'Auto position created for {coin}'})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@_flask_wsgi_app.route('/api/auto/positions/pending', methods=['GET'])
+def get_pending_positions():
+    """Bekleyen auto pozisyonları getir"""
+    try:
+        if 'username' not in session:
+            return jsonify({'error': 'Login required'}), 401
+        
+        username = session['username']
+        conn = db()
+        
+        positions = conn.execute("""
+            SELECT * FROM auto_positions 
+            WHERE username = ? AND status = 'waiting'
+            ORDER BY created_at DESC
+        """, (username,)).fetchall()
+        
+        return jsonify({
+            'success': True,
+            'positions': [dict(p) for p in positions]
+        })
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@_flask_wsgi_app.route('/api/auto/positions/active', methods=['GET'])
+def get_active_positions():
+    """Aktif auto pozisyonları getir"""
+    try:
+        if 'username' not in session:
+            return jsonify({'error': 'Login required'}), 401
+        
+        username = session['username']
+        conn = db()
+        
+        positions = conn.execute("""
+            SELECT * FROM auto_positions 
+            WHERE username = ? AND status = 'open'
+            ORDER BY entry_at DESC
+        """, (username,)).fetchall()
+        
+        # Güncel fiyatları çek
+        result = []
+        for pos in positions:
+            price_data = get_multi_exchange_price(pos['coin'])
+            if price_data:
+                current_price = price_data['best_sell']['price']
+                pnl = ((current_price - pos['entry_price']) / pos['entry_price']) * 100
+                
+                result.append({
+                    'id': pos['id'],
+                    'coin': pos['coin'],
+                    'amount_usdt': pos['amount_usdt'],
+                    'entry_price': pos['entry_price'],
+                    'current_price': current_price,
+                    'pnl_pct': pnl,
+                    'entry_at': pos['entry_at'],
+                    'exchange_id': pos['exchange_id']
+                })
+        
+        return jsonify({'success': True, 'positions': result})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@_flask_wsgi_app.route('/api/auto/position/sell/<int:position_id>', methods=['POST'])
+def sell_auto_position(position_id):
+    """Manuel SELL"""
+    try:
+        if 'username' not in session:
+            return jsonify({'error': 'Login required'}), 401
+        
+        username = session['username']
+        conn = db()
+        
+        position = conn.execute("""
+            SELECT * FROM auto_positions 
+            WHERE id = ? AND username = ? AND status = 'open'
+        """, (position_id, username)).fetchone()
+        
+        if not position:
+            return jsonify({'error': 'Position not found'}), 404
+        
+        # Fiyatı çek ve sat
+        price_data = get_multi_exchange_price(position['coin'])
+        if not price_data:
+            return jsonify({'error': 'Could not fetch price'}), 500
+        
+        exit_price = price_data['best_sell']['price']
+        pnl = ((exit_price - position['entry_price']) / position['entry_price']) * 100
+        
+        conn.execute("""
+            UPDATE auto_positions 
+            SET status = 'closed', current_price = ?, pnl = ?, exit_at = ?
+            WHERE id = ?
+        """, (exit_price, pnl, datetime.now().isoformat(), position_id))
+        conn.commit()
+        
+        return jsonify({
+            'success': True,
+            'message': 'Position closed',
+            'exit_price': exit_price,
+            'pnl_pct': pnl
+        })
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@_flask_wsgi_app.route('/api/auto/prices/<symbol>', methods=['GET'])
+def get_multi_exchange_prices(symbol):
+    """Multi-exchange fiyat karşılaştırması"""
+    try:
+        price_data = get_multi_exchange_price(symbol)
+        if not price_data:
+            return jsonify({'error': 'Could not fetch prices'}), 500
+        
+        return jsonify({'success': True, 'data': price_data})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+# AI Auto Sell Background Task
+def ai_auto_sell_daemon():
+    """Günde 15-16 kere çalışan AI auto sell kontrolü"""
+    import threading, time
+    
+    def run():
+        while True:
+            try:
+                conn = db()
+                # Tüm aktif pozisyonları kontrol et
+                positions = conn.execute("""
+                    SELECT * FROM auto_positions WHERE status = 'open'
+                """).fetchall()
+                
+                for pos in positions:
+                    try:
+                        price_data = get_multi_exchange_price(pos['coin'])
+                        if not price_data:
+                            continue
+                        
+                        current_price = price_data['best_sell']['price']
+                        
+                        # AI'dan karar al
+                        ai_decision = ai_should_sell(
+                            pos['coin'], 
+                            pos['entry_price'], 
+                            current_price
+                        )
+                        
+                        if ai_decision['decision'] == 'SELL':
+                            # Otomatik SELL
+                            exit_price = current_price
+                            pnl = ai_decision['profit_pct']
+                            
+                            conn.execute("""
+                                UPDATE auto_positions 
+                                SET status = 'closed', current_price = ?, pnl = ?, exit_at = ?
+                                WHERE id = ?
+                            """, (exit_price, pnl, datetime.now().isoformat(), pos['id']))
+                            conn.commit()
+                            
+                            print(f"[AI SELL] {pos['coin']} sold at ${exit_price}, PNL: {pnl:.2f}%")
+                            print(f"[AI REASONING] {ai_decision['reasoning']}")
+                    except Exception as e:
+                        print(f"[AI SELL ERROR] Position {pos['id']}: {e}")
+                        continue
+                
+            except Exception as e:
+                print(f"[AI DAEMON ERROR] {e}")
+            
+            # 90 dakika bekle (günde ~16 kere)
+            time.sleep(90 * 60)
+    
+    t = threading.Thread(target=run, name="ai_auto_sell_daemon", daemon=True)
+    t.start()
+    print("[AI DAEMON] Started - checking every 90 minutes")
+
+# Daemon'u başlat
+try:
+    ai_auto_sell_daemon()
+except Exception as e:
+    print(f"[AI DAEMON] Failed to start: {e}")
+
+# ==================== END TRADINGVIEW WEBHOOK + AI AUTO TRADING ====================
+
+
 # Wrap Flask WSGI app for ASGI compatibility (uvicorn)
 from asgiref.wsgi import WsgiToAsgi
 _flask_wsgi_app = app
