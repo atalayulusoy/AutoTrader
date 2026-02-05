@@ -37814,6 +37814,191 @@ except Exception as e:
 # ==================== END DEMO MODE ====================
 
 
+# ==================== SUBSCRIPTION CHECK DAEMON ====================
+
+_subscription_checker_running = False
+
+def subscription_check_daemon():
+    """
+    Checks user subscriptions daily:
+    1. Sends Telegram notification when subscription expires
+    2. Disables trading for expired subscriptions
+    """
+    global _subscription_checker_running
+    if _subscription_checker_running:
+        return
+    _subscription_checker_running = True
+    
+    def check_subscriptions():
+        while True:
+            try:
+                # Check every hour
+                time.sleep(3600)
+                
+                current_time = now_ts()
+                conn = db()
+                
+                # Find users whose subscription is expiring today or expired
+                # subscription_notified = 0 means not yet notified
+                expiring_users = conn.execute("""
+                    SELECT id, username, display_name, telegram_chat_id, subscription_type, 
+                           subscription_end, subscription_active, subscription_notified
+                    FROM users 
+                    WHERE subscription_end <= ? AND subscription_end > 0
+                """, (current_time + 86400,)).fetchall()  # Check 24 hours ahead
+                
+                for user in expiring_users:
+                    user_id = user[0]
+                    username = user[1]
+                    display_name = user[2] or username
+                    telegram_chat_id = user[3]
+                    sub_type = user[4]
+                    sub_end = user[5]
+                    sub_active = user[6]
+                    sub_notified = user[7]
+                    
+                    # Skip if already notified
+                    if sub_notified:
+                        # Check if subscription actually expired (past due)
+                        if sub_end < current_time and sub_active:
+                            # Disable trading for this user
+                            conn.execute("""
+                                UPDATE users SET subscription_active=0, trade_enabled=0 
+                                WHERE id=?
+                            """, (user_id,))
+                            conn.commit()
+                            print(f"[SUBSCRIPTION] Disabled trading for expired user: {username}")
+                            
+                            # Send final notice
+                            if telegram_chat_id:
+                                try:
+                                    msg = f"""❌ ABONELİK SONA ERDİ
+
+Merhaba {display_name},
+
+Aboneliğiniz sona erdi ve işlem yapma yetkiniz askıya alındı.
+
+Tekrar işlem yapabilmek için lütfen aboneliğinizi yenileyin:
+➡️ Ödeme Yönetimi sayfasından paket seçin
+
+Sorularınız için bizimle iletişime geçebilirsiniz.
+
+Atalay Trade Bot"""
+                                    telegram_send_to(telegram_chat_id, msg)
+                                except Exception as e:
+                                    print(f"[SUBSCRIPTION] Telegram send error: {e}")
+                        continue
+                    
+                    # Subscription expiring soon - send warning
+                    hours_left = (sub_end - current_time) / 3600
+                    
+                    if hours_left <= 24 and hours_left > 0:
+                        # Expiring in 24 hours
+                        if telegram_chat_id:
+                            try:
+                                from datetime import datetime
+                                expire_date = datetime.fromtimestamp(sub_end).strftime('%d.%m.%Y %H:%M')
+                                
+                                msg = f"""⚠️ ABONELİK UYARISI
+
+Merhaba {display_name},
+
+{sub_type.upper()} paketiniz yakında sona erecek!
+
+📅 Bitiş Tarihi: {expire_date}
+⏰ Kalan Süre: ~{int(hours_left)} saat
+
+Kesintisiz işlem yapmaya devam etmek için lütfen aboneliğinizi yenileyin:
+➡️ Ödeme Yönetimi sayfasından gerekli işlemleri yapın
+
+Atalay Trade Bot"""
+                                telegram_send_to(telegram_chat_id, msg)
+                                
+                                # Mark as notified
+                                conn.execute("UPDATE users SET subscription_notified=1 WHERE id=?", (user_id,))
+                                conn.commit()
+                                print(f"[SUBSCRIPTION] Sent expiry warning to: {username}")
+                            except Exception as e:
+                                print(f"[SUBSCRIPTION] Telegram send error: {e}")
+                
+                conn.close()
+                
+            except Exception as e:
+                print(f"[SUBSCRIPTION DAEMON ERROR] {e}")
+                time.sleep(300)  # Wait 5 minutes on error
+    
+    t = threading.Thread(target=check_subscriptions, name="subscription_checker", daemon=True)
+    t.start()
+    print("[SUBSCRIPTION] Checker daemon started - Checking hourly")
+
+# Start subscription checker daemon
+try:
+    subscription_check_daemon()
+except Exception as e:
+    print(f"[SUBSCRIPTION] Failed to start checker: {e}")
+
+
+# ==================== SUBSCRIPTION CHECK FUNCTION ====================
+
+def check_user_subscription(user_id: int) -> dict:
+    """
+    Check if user has active subscription
+    Returns: {"active": bool, "type": str, "expires_in": int (seconds), "can_trade": bool}
+    """
+    try:
+        conn = db()
+        user = conn.execute("""
+            SELECT subscription_type, subscription_start, subscription_end, subscription_active, trade_enabled
+            FROM users WHERE id=?
+        """, (user_id,)).fetchone()
+        conn.close()
+        
+        if not user:
+            return {"active": False, "type": "none", "expires_in": 0, "can_trade": False, "message": "Kullanıcı bulunamadı"}
+        
+        sub_type = user[0] or "trial"
+        sub_end = user[2] or 0
+        sub_active = user[3]
+        trade_enabled = user[4]
+        
+        current_time = now_ts()
+        expires_in = max(0, sub_end - current_time)
+        
+        # Check if subscription is still valid
+        is_valid = sub_end > current_time and sub_active
+        
+        # Trial users can only use demo mode
+        can_trade_real = is_valid and trade_enabled and sub_type != "trial"
+        can_trade_demo = is_valid  # Everyone can use demo during valid subscription
+        
+        return {
+            "active": is_valid,
+            "type": sub_type,
+            "expires_in": expires_in,
+            "expires_in_days": expires_in // 86400,
+            "can_trade_real": can_trade_real,
+            "can_trade_demo": can_trade_demo,
+            "message": "Aktif" if is_valid else "Abonelik süresi dolmuş"
+        }
+    except Exception as e:
+        print(f"[SUBSCRIPTION] Check error: {e}")
+        return {"active": False, "type": "error", "expires_in": 0, "can_trade": False, "message": str(e)}
+
+
+@app.route('/api/subscription/status')
+def api_subscription_status():
+    """Get current user's subscription status"""
+    if not session.get("logged_in"):
+        return jsonify(ok=False, error="AUTH"), 401
+    
+    user_id = session.get("user_id", 0)
+    status = check_user_subscription(user_id)
+    return jsonify(ok=True, subscription=status)
+
+
+# ==================== END SUBSCRIPTION SYSTEM ====================
+
+
 # WSGI/ASGI wrapper for compatibility
 # For Emergent/Uvicorn: ASGI wrapper needed
 # For user's server (Gunicorn): Comment out these 3 lines
