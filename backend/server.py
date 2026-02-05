@@ -20894,6 +20894,62 @@ def save_exchange_config():
         return jsonify({'success': False, 'message': str(e)}), 500
 
 
+@app.route('/api/exchange/configs', methods=['GET'])
+def get_exchange_configs():
+    """Get all saved exchange API configs for current user"""
+    try:
+        user_id = session.get('user_id')
+        if not user_id:
+            return jsonify({'ok': False, 'error': 'AUTH_REQUIRED'}), 401
+        
+        user_id = str(user_id)
+        conn = get_exchange_db()
+        init_exchange_table()
+        
+        rows = conn.execute(
+            "SELECT exchange, api_key, api_secret, passphrase, mode FROM exchange_api_keys WHERE user_id=?",
+            (user_id,)
+        ).fetchall()
+        conn.close()
+        
+        configs = []
+        for row in rows:
+            exchange = row[0].upper()
+            api_key = decrypt_data(row[1]) if row[1] else ''
+            api_secret = decrypt_data(row[2]) if row[2] else ''
+            passphrase = decrypt_data(row[3]) if row[3] else ''
+            
+            # Optionally fetch balance for OKX
+            balance = None
+            if exchange == 'OKX' and api_key and api_secret and passphrase:
+                try:
+                    import ccxt
+                    client = ccxt.okx({
+                        'apiKey': api_key,
+                        'secret': api_secret,
+                        'password': passphrase,
+                        'enableRateLimit': True
+                    })
+                    bal = client.fetch_balance()
+                    if bal and 'total' in bal and 'USDT' in bal['total']:
+                        balance = float(bal['total']['USDT'] or 0)
+                except Exception as e:
+                    print(f"[EXCHANGE] Balance fetch error for {exchange}: {e}")
+            
+            configs.append({
+                'exchange': exchange,
+                'api_key': api_key,
+                'api_secret': '••••••••' if api_secret else '',  # Don't expose secret
+                'passphrase': '••••••••' if passphrase else '',  # Don't expose passphrase
+                'balance': balance
+            })
+        
+        return jsonify({'ok': True, 'configs': configs})
+    except Exception as e:
+        print(f"[EXCHANGE] get configs error: {e}")
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
 @app.route('/api/exchange/delete', methods=['POST'])
 def delete_exchange_config():
     """Delete API keys for an exchange"""
