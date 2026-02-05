@@ -35902,7 +35902,7 @@ TAHMİN: YUKSELIŞ veya DÜŞÜŞ"""
         return {'decision': 'HOLD', 'reasoning': 'Auto: Düşük kar', 'profit_pct': profit_pct}
 
 # TradingView Webhook Endpoint
-@_flask_wsgi_app.route('/api/tradingview/webhook', methods=['POST'])
+@app.route('/api/tradingview/webhook', methods=['POST'])
 def tradingview_webhook():
     """TradingView'den sinyal al"""
     try:
@@ -35974,7 +35974,7 @@ def tradingview_webhook():
         return jsonify({'error': str(e)}), 500
 
 # Auto Position Management
-@_flask_wsgi_app.route('/api/auto/position/create', methods=['POST'])
+@app.route('/api/auto/position/create', methods=['POST'])
 def create_auto_position():
     """Yeni auto pozisyon oluştur (BTC/20USDT gibi)"""
     try:
@@ -36000,7 +36000,7 @@ def create_auto_position():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
-@_flask_wsgi_app.route('/api/auto/positions/pending', methods=['GET'])
+@app.route('/api/auto/positions/pending', methods=['GET'])
 def get_pending_positions():
     """Bekleyen auto pozisyonları getir"""
     try:
@@ -36023,7 +36023,7 @@ def get_pending_positions():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
-@_flask_wsgi_app.route('/api/auto/positions/active', methods=['GET'])
+@app.route('/api/auto/positions/active', methods=['GET'])
 def get_active_positions():
     """Aktif auto pozisyonları getir"""
     try:
@@ -36062,7 +36062,7 @@ def get_active_positions():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
-@_flask_wsgi_app.route('/api/auto/position/sell/<int:position_id>', methods=['POST'])
+@app.route('/api/auto/position/sell/<int:position_id>', methods=['POST'])
 def sell_auto_position(position_id):
     """Manuel SELL"""
     try:
@@ -36104,7 +36104,7 @@ def sell_auto_position(position_id):
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
-@_flask_wsgi_app.route('/api/auto/prices/<symbol>', methods=['GET'])
+@app.route('/api/auto/prices/<symbol>', methods=['GET'])
 def get_multi_exchange_prices(symbol):
     """Multi-exchange fiyat karşılaştırması"""
     try:
