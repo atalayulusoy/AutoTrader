@@ -35798,14 +35798,14 @@ except Exception:
 
 # ==================== TRADINGVIEW WEBHOOK + AI AUTO TRADING ====================
 # Google Gemini AI için konfigürasyon
-import google.generativeai as genai
+from google import genai
+from google.genai import types
 import json
 import time
 from datetime import datetime
 
 GEMINI_API_KEY = "AIzaSyAlwjI7vwFWZPRDROLjb_5tPZGL6airtQ4"
-genai.configure(api_key=GEMINI_API_KEY)
-gemini_model = genai.GenerativeModel('gemini-1.5-flash')
+client = genai.Client(api_key=GEMINI_API_KEY)
 
 def get_multi_exchange_price(symbol):
     """Birden fazla borsadan fiyat çek ve en iyi fiyatı döndür"""
@@ -35878,7 +35878,10 @@ KARAR: SELL veya HOLD
 SEBEP: Kısa açıklama (1 cümle)
 TAHMİN: YUKSELIŞ veya DÜŞÜŞ"""
 
-        response = gemini_model.generate_content(prompt)
+        response = client.models.generate_content(
+            model='gemini-1.5-flash',
+            contents=prompt
+        )
         ai_response = response.text
         
         # Response parse et
