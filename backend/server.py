@@ -26912,11 +26912,38 @@ showPopup({
         loadPositions();
         loadExchangeStatus();
         loadAnalyticsSummary();
+        loadRealBalance(); // İlk yüklemede bakiyeyi çek
         setInterval(loadPositions, 2000);  // Update positions every 2 seconds for real-time PnL
         setInterval(loadAutoTrades, 5000); // Update auto trades every 5 seconds
         setInterval(loadExchangeStatus, 30000);
         setInterval(loadAnalyticsSummary, 10000); // Update analytics every 10 seconds
+        setInterval(loadRealBalance, 15000); // Update balance every 15 seconds
     });
+    
+    // Load real OKX balance
+    async function loadRealBalance() {
+        try {
+            const res = await fetch('/api/real/balance', { credentials: 'include' });
+            const data = await res.json();
+            if (data.ok) {
+                const balance = data.balance || data.balance_usdt || data.usdt || 0;
+                const formatted = Number(balance).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+                
+                // Update all balance displays
+                const unifiedEl = document.getElementById('unifiedBalanceDisplay');
+                const balanceEl = document.getElementById('balanceDisplay');
+                const demoBtnEl = document.getElementById('demoBtnBalance');
+                
+                if (unifiedEl) unifiedEl.textContent = formatted + ' USDT';
+                if (balanceEl) balanceEl.textContent = formatted + ' USDT';
+                if (demoBtnEl) demoBtnEl.textContent = '$' + formatted + ' USDT';
+                
+                console.log('[BALANCE] Loaded:', formatted, 'USDT');
+            }
+        } catch (e) {
+            console.error('[BALANCE] Error:', e);
+        }
+    }
     
     // Load exchange connection status
     async function loadExchangeStatus() {
