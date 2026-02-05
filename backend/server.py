@@ -26021,14 +26021,23 @@ FULL_DASHBOARD_TEMPLATE = """
         const overlay = document.getElementById('sidebar-overlay');
         if (!sb) return;
         
-        const isOpen = sb.classList.contains('open');
-        
-        if (isOpen) {
-            sb.classList.remove('open');
+        // Check if using translate class (from get_sidebar_html)
+        if (sb.classList.contains('-translate-x-full')) {
+            sb.classList.replace('-translate-x-full', 'translate-x-0');
+            if (overlay) overlay.classList.remove('hidden');
+        } else if (sb.classList.contains('translate-x-0')) {
+            sb.classList.replace('translate-x-0', '-translate-x-full');
             if (overlay) overlay.classList.add('hidden');
         } else {
-            sb.classList.add('open');
-            if (overlay) overlay.classList.remove('hidden');
+            // Fallback for .open class
+            const isOpen = sb.classList.contains('open');
+            if (isOpen) {
+                sb.classList.remove('open');
+                if (overlay) overlay.classList.add('hidden');
+            } else {
+                sb.classList.add('open');
+                if (overlay) overlay.classList.remove('hidden');
+            }
         }
     }
     
