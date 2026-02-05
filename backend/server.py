@@ -8311,18 +8311,22 @@ def register_route():
             salt = secrets.token_hex(16)
             pw_hash = hash_password(password, salt)
             
-            # Insert user with correct schema
+            # Trial subscription - 7 days from now
+            trial_start = now_ts()
+            trial_end = trial_start + (7 * 24 * 60 * 60)  # 7 gün
+            
+            # Insert user with trial subscription
             conn.execute(
                 """INSERT INTO users (username, display_name, salt, password_hash, is_admin, trade_enabled, 
                    disable_on_limit, exchange_id, webhook_secret, package_name, package_limit, package_months, 
-                   expires_at, total_pnl, created_at, email)
-                   VALUES (?, ?, ?, ?, 0, 1, 1, 'OKX', '', 'Basic', 300, 1, 0, 0, ?, ?)""",
-                (email, full_name, salt, pw_hash, now_ts(), email)
+                   expires_at, total_pnl, created_at, email, subscription_type, subscription_start, subscription_end, subscription_active)
+                   VALUES (?, ?, ?, ?, 0, 1, 1, 'OKX', '', 'Deneme', 50, 0, ?, 0, ?, ?, 'trial', ?, ?, 1)""",
+                (email, full_name, salt, pw_hash, trial_end, trial_start, email, trial_start, trial_end)
             )
             conn.commit()
             
             return render_template_string(REGISTER_TEMPLATE, title="Hesap Oluştur", global_css=GLOBAL_CSS, 
-                success="Kayıt başarılı! 1 günlük ücretsiz deneme ve test bakiyesi hesabınıza tanımlandı. Şimdi giriş yapabilirsiniz.")
+                success="Kayıt başarılı! 7 günlük ücretsiz deneme paketiniz aktif edildi. Bu süre içinde demo mod ile pratik yapabilirsiniz. Şimdi giriş yapabilirsiniz.")
         except Exception as e:
             import traceback
             traceback.print_exc()
