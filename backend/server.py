@@ -35450,3 +35450,6 @@ except Exception:
 # These were duplicate and causing AssertionError
 # Original routes are defined earlier in the file (line 20349-20400)
 
+# Export app_asgi as 'app' for uvicorn compatibility
+app = app_asgi
+
