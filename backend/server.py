@@ -20381,7 +20381,9 @@ def list_exchange_config():
 
 # Note: page_about, page_contact, page_faq, page_support routes defined at end of file (line ~25660)
 
-
+@app.route('/education')
+@app.route('/education-hub')
+@app.route('/api/app/education')
 def page_education():
     return render_template_string(EDUCATION_HUB_TEMPLATE, sidebar=get_sidebar_html("education"))
 
